@@ -1,0 +1,10 @@
+/**/.ipynb_checkpoints/
+/**/__pycache__/
+
+/**/frames/
+/**/lattviz_frames/
+*.png
+*.gif
+
+*.npy
+

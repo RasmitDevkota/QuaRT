@@ -1,10 +1,12 @@
+# Auto-generated Python directories
 /**/.ipynb_checkpoints/
 /**/__pycache__/
 
+# Outputs
+/**/outputs/
 /**/frames/
 /**/lattviz_frames/
 *.png
 *.gif
-
 *.npy
 

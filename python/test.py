@@ -1,0 +1,166 @@
+import sys
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from qlbm_rt import simulate
+from qlbm_utils import lattice_to_vector
+
+# Point source 1D test
+def test_point_source_1D(N=None, n_it=10):
+    n = 1
+    m = 2
+
+    if N is None:
+        N = [8]
+    else:
+        N = [int(N)]
+
+    n_it = int(n_it)
+
+    M_0 = np.prod(N)
+    M = 2**int(np.ceil(np.log2(M_0)))
+
+    I_i = np.zeros(shape=(M, m))
+    src_lattice = np.zeros(shape=(*N, m))
+    src_lattice[N[0]//2, :] = 1
+    S_i = lattice_to_vector(src_lattice)
+
+    lattices = simulate(
+        I_i, S_i,
+        n, m,
+        N,
+        n_it=n_it,
+        save_lattices=True
+    )
+
+    lattices = np.save(f"outputs/lattice_point_src_1D_{n_it}.npy", lattices)
+
+    analyze_point_source_1D(n_it)
+
+def analyze_point_source_1D(n_it=10, sep_dirs=True):
+    n_it = int(n_it)
+
+    lattices = np.load(f"outputs/lattice_point_src_1D_{n_it}.npy")
+
+    fig, ax = plt.subplots(nrows=n_it+1)
+
+    for i, lattice in enumerate(lattices):
+        if sep_dirs:
+            ax[i].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red")
+            ax[i].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue")
+        else:
+            ax[i].scatter(np.arange(lattice.shape[0]), np.sum(lattice, axis=1))
+
+        ax[i].set_title(f"Iteration {i}")
+
+    plt.show()
+
+# Isotropic source test (Devkota and Wise, Test 1)
+def test_isotropic_source(n=2, m=8, N=None, n_it=3):
+    n = int(n)
+    m = int(m)
+
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    M = np.prod(N)
+
+    I_i = np.zeros(shape=(M, m))
+
+    src_lattice = np.zeros(shape=(*N, m))
+    src_lattice[0, 0, :] = 1
+    plt.imshow(np.sum(src_lattice, axis=2))
+    S_i = lattice_to_vector(src_lattice)
+
+    lattices = simulate(
+        I_i, S_i,
+        n, m,
+        N,
+        n_it=n_it,
+        save_lattices=True
+    )
+
+    np.save(f"outputs/lattice_iso_source_{n_it}.npy", lattices)
+
+    analyze_isotropic_source(n_it)
+
+def analyze_isotropic_source(n_it=5):
+    n_it = int(n_it)
+
+    lattices = np.load(f"outputs/lattice_iso_source_{n_it}.npy")
+
+    fig, ax = plt.subplots(ncols=n_it+1)
+
+    for i, lattice in enumerate(lattices):
+        ax[i].imshow(lattice.sum(axis=2))
+
+        ax[i].title(f"Iteration {i}")
+
+    plt.show()
+
+# Crossing radiation beams test (Devkota and Wise, Test 2)
+def test_crossing_radiation_beams():
+    raise NotImplementedError()
+
+# Shadow test (Devkota and Wise, Test 3)
+def test_shadow():
+    raise NotImplementedError()
+
+# Amplitude loss test (Devkota and Wise, Test 4)
+def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):
+    n = int(n)
+    m = int(m)
+
+    if N is None:
+        N = [4]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    M = np.prod(N)
+
+    I_i = np.zeros(shape=(M, m))
+    I_i[[0]*n, 0] = 1 # in the sourceless free intensity case, does the amplitude actually tighten and/or increase over time?
+
+    S_i = np.zeros(shape=(M, m))
+    # S_i[[0]*n, 1] = 1
+
+    lattices = simulate(
+        I_i, S_i,
+        n, m,
+        N,
+        n_it=n_it,
+        save_lattices=True
+    )
+
+    iterations = np.arange(n_it+1)
+    norms = [np.linalg.norm(lattice) for lattice in lattices]
+    np.savetxt(f"outputs/norms_amp_loss_{n_it}.txt", norms)
+
+    analyze_amplitude_loss(n_it)
+
+def analyze_amplitude_loss(n_it=5):
+    n_it = int(n_it)
+
+    iterations = np.arange(n_it+1)
+    norms = np.loadtxt(f"outputs/norms_amp_loss_{n_it}.txt")
+
+    print(f"Mean: {np.mean(norms[1:])}\nStandard Deviation: {np.std(norms[1:])}\nRange: {np.ptp(norms[1:])}")
+
+    a, b = np.polyfit(iterations[1:], norms[1:], 1)
+    print(f"Line of best fit: A(t) ≈ {a:.6f}t + {b:.6f}")
+
+    fig, ax = plt.subplots()
+    plt.scatter(iterations, norms)
+    plt.plot(iterations, a * iterations + b)
+    plt.show()
+
+if __name__ == "__main__":
+    option = sys.argv[1]
+    args = sys.argv[2:]
+    print(f"running {option}({args})...")
+
+    locals()[option](*args)
+

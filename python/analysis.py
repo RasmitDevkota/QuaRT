@@ -30,8 +30,7 @@ def measurements_to_lattice(
 			lattice[lattice_point, mu] += count
 			
 			if verbose:
-				print(outcome)
-				print(f"{lattice_point_bin} ({lattice_point}), {mu}")
+				print(f"{outcome} -> {lattice_point_bin} ({lattice_point}), {mu}: {count}")
 
 	return lattice
 

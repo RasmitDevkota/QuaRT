@@ -130,7 +130,6 @@ def simulate(
                 n_qubits,
                 qreg_head, qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla
             )
-            # SPCircuit = state_preparation(I_prev, S_prev, m, delta_t, coord_idx_map, m_max_bin, n_qubits, qreg_head, qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla)
             qc = qc.compose(
                 SPCircuit,
                 qreg_head[:] + qreg_lattice[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]
@@ -172,7 +171,7 @@ def simulate(
         print("--- transpiling and running", time.time())
 
         qc_transpiled = transpile(qc_meas, aer_sim, optimization_level=0)
-        result = aer_sim.run(qc_transpiled, shots=1E3).result()
+        result = aer_sim.run(qc_transpiled, shots=1E4).result()
         counts = result.get_counts(qc_transpiled)
 
         print("--- wrapping up", time.time())
@@ -185,7 +184,8 @@ def simulate(
             m, N,
             counts,
             idx_coord_map,
-            lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits
+            lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+            verbose=True
         )
         if np.linalg.norm(lattice) > 0:
             print(lattice/np.linalg.norm(lattice))

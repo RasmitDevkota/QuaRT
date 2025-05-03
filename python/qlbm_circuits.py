@@ -19,6 +19,9 @@ def state_preparation(
 
     anc_bin = "000"
 
+    prob_amp_I = 0
+    prob_amp_S = 0
+
     for c, (coordinate_idx, coordinate_bin) in enumerate(coord_idx_map.items()):
         coordinate_bin = coordinate_bin[::-1]
 
@@ -28,8 +31,13 @@ def state_preparation(
             for s_bin in range(2):
                 if s_bin == 0:
                     prob_amp = I_i[c, mu]
+                    prob_amp_I += prob_amp
                 else:
                     prob_amp = 0.5 * delta_t * S_i[c, mu]
+                    # @TODO - why does this fix it, I know it effectively has to do with normalization,
+                    #         but I think it should be performed somewhere else
+                    prob_amp *= 2
+                    prob_amp_S += prob_amp
 
                 idx_bin = f"0b{anc_bin}{s_bin}{mu_bin}{coordinate_bin}0"
                 idx_dec = int(idx_bin, 2)
@@ -40,6 +48,8 @@ def state_preparation(
         print(norm)
     if norm > 0:
         initial_statevector /= norm
+
+    print(prob_amp_I, prob_amp_S)
 
     qc = QuantumCircuit(qreg_head, qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla)
     qc.initialize(initial_statevector)

@@ -36,9 +36,9 @@ def test_point_source_1D(N=None, n_it=10):
 
     lattices = np.save(f"outputs/lattice_point_src_1D_{n_it}.npy", lattices)
 
-    analyze_point_source_1D(n_it)
+    analysis_point_source_1D(n_it)
 
-def analyze_point_source_1D(n_it=10, sep_dirs=True):
+def analysis_point_source_1D(n_it=10, sep_dirs=True):
     n_it = int(n_it)
 
     lattices = np.load(f"outputs/lattice_point_src_1D_{n_it}.npy")
@@ -56,7 +56,7 @@ def analyze_point_source_1D(n_it=10, sep_dirs=True):
 
     plt.show()
 
-# Isotropic source test (Devkota and Wise, Test 1)
+# Isotropic source test
 def test_isotropic_source(n=2, m=8, N=None, n_it=3):
     n = int(n)
     m = int(m)
@@ -66,12 +66,14 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
     else:
         N = [int(d) for d in N.split(",")]
 
+    n_it = int(n_it)
+
     M = np.prod(N)
 
     I_i = np.zeros(shape=(M, m))
 
     src_lattice = np.zeros(shape=(*N, m))
-    src_lattice[0, 0, :] = 1
+    src_lattice[*[N_i//2 for N_i in N], :] = 1
     plt.imshow(np.sum(src_lattice, axis=2))
     S_i = lattice_to_vector(src_lattice)
 
@@ -85,9 +87,9 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
 
     np.save(f"outputs/lattice_iso_source_{n_it}.npy", lattices)
 
-    analyze_isotropic_source(n_it)
+    analysis_isotropic_source(n_it)
 
-def analyze_isotropic_source(n_it=5):
+def analysis_isotropic_source(n_it=5):
     n_it = int(n_it)
 
     lattices = np.load(f"outputs/lattice_iso_source_{n_it}.npy")
@@ -97,19 +99,19 @@ def analyze_isotropic_source(n_it=5):
     for i, lattice in enumerate(lattices):
         ax[i].imshow(lattice.sum(axis=2))
 
-        ax[i].title(f"Iteration {i}")
+        ax[i].set_title(f"Iteration {i}")
 
     plt.show()
 
-# Crossing radiation beams test (Devkota and Wise, Test 2)
+# Crossing radiation beams test
 def test_crossing_radiation_beams():
     raise NotImplementedError()
 
-# Shadow test (Devkota and Wise, Test 3)
+# Shadow test
 def test_shadow():
     raise NotImplementedError()
 
-# Amplitude loss test (Devkota and Wise, Test 4)
+# Amplitude loss test
 def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):
     n = int(n)
     m = int(m)
@@ -139,9 +141,9 @@ def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):
     norms = [np.linalg.norm(lattice) for lattice in lattices]
     np.savetxt(f"outputs/norms_amp_loss_{n_it}.txt", norms)
 
-    analyze_amplitude_loss(n_it)
+    analysis_amplitude_loss(n_it)
 
-def analyze_amplitude_loss(n_it=5):
+def analysis_amplitude_loss(n_it=5):
     n_it = int(n_it)
 
     iterations = np.arange(n_it+1)

@@ -27,7 +27,7 @@ def measurements_to_lattice(
 			lattice_direction_bin = "".join(outcome[l] for l in direction_qubits)
 			mu = int(lattice_direction_bin, 2)
 			
-			lattice[lattice_point, mu] += count
+			lattice[*lattice_point, mu] += count
 			
 			if verbose:
 				print(f"{outcome} -> {lattice_point_bin} ({lattice_point}), {mu}: {count}")

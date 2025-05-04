@@ -158,8 +158,7 @@ def propagation(
     qc = QuantumCircuit(qreg_lattice, qreg_direction, qreg_switch)
 
     cpu_count = mp.cpu_count()
-    batch_size = int(np.ceil(m/cpu_count))
-    # batch_size = 1
+    batch_size = max(int(np.ceil(m/cpu_count)), 1)
 
     pool = mp.Pool(cpu_count)
     results = pool.starmap(
@@ -203,7 +202,7 @@ def single_direction_propagation(
 
     mu_bin = bin(mu)[2:].zfill(len(m_max_bin))
     if verbose:
-        print(f"Direction (binary): {mu_bin}")
+        print(f"Process {mp.current_process().name} processing direction {mu} (binary {mu_bin})")
 
     for idx_init_bin, coord_init in idx_coord_map.items():
         # Periodic BCs

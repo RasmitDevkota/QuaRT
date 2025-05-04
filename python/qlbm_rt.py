@@ -99,12 +99,23 @@ def simulate(
 
     lattices = []
 
-    # If a GPU is available, prefer cuQuantum's cuStateVec library to accelerate simulation (if built with support)
-    device = "GPU" if "GPU" in AerSimulator().available_devices() else "CPU"
-    cuStateVec_enable = "GPU" in AerSimulator().available_devices()
-
     # Set up AerSimulator in advance (we only need to do this once)
-    aer_sim = AerSimulator(method="automatic", device=device, cuStateVec_enable=cuStateVec_enable)
+    if "GPU" in AerSimulator().available_devices():
+        # If a GPU is available, prefer cuQuantum's cuStateVec library to accelerate simulation (if built with support)
+        aer_sim = AerSimulator(
+            method="automatic",
+            device="GPU",
+            cuStateVec_enable=True
+        )
+        print("Using GPU")
+    else:
+        aer_sim = AerSimulator(
+            method="automatic",
+            max_parallel_threads=16,
+            max_parallel_shots=1,
+            max_parallel_experiments=1
+        )
+        print("Using CPU")
 
     for it in range(n_it+1):
         print(f"===== Iteration {it} =====")
@@ -117,6 +128,8 @@ def simulate(
         # print("Initial statevector:", statevector_to_str(np.array(initial_statevector)))
 
         print("--- new iteration", time.time())
+
+        print("--- constructing circuit", time.time())
 
         # @TODO - figure out whether or not some sort of condition is needed here
         #         (seems like we may be getting the backwards power law problem again)
@@ -136,10 +149,8 @@ def simulate(
             )
             qc.barrier()
 
-        print("--- completed state prep", time.time())
-
-        recovered_statevector = Statevector(qc)
-        print("Recovered statevector:", statevector_to_str(np.array(recovered_statevector)))
+        # recovered_statevector = Statevector(qc)
+        # print("Recovered statevector:", statevector_to_str(np.array(recovered_statevector)))
 
         # At the zeroth iteration, we only do state preparation
         if it == 1:
@@ -163,8 +174,6 @@ def simulate(
         # sv, sv_proj, sv_lattice = statevector_analysis(qc, n_qubits, auxiliary_qubits, ancilla_qubits)
 
         # Perform measurements to construct lattice
-        print("--- lattice measurements", time.time())
-
         qc_meas = qc.copy()
         qc_meas.measure(range(n_qubits), creg_measure)
 

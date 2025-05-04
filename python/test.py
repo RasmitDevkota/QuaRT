@@ -22,6 +22,7 @@ def test_point_source_1D(N=None, n_it=10):
     M = 2**int(np.ceil(np.log2(M_0)))
 
     I_i = np.zeros(shape=(M, m))
+
     src_lattice = np.zeros(shape=(*N, m))
     src_lattice[N[0]//2, :] = 1
     S_i = lattice_to_vector(src_lattice)
@@ -56,6 +57,61 @@ def analysis_point_source_1D(n_it=10, sep_dirs=True):
 
     plt.show()
 
+# Unidirectional radiation test
+def test_unidirectional_source(n=2, m=8, N=None, n_it=3):
+    n = int(n)
+    m = int(m)
+
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    n_it = int(n_it)
+
+    M = np.prod(N)
+
+    for mu in range(m):
+        I_i = np.zeros(shape=(M, m))
+
+        src_lattice = np.zeros(shape=(*N, m))
+        src_lattice[N[0]//2, N[1]//2, mu] = 1
+        S_i = lattice_to_vector(src_lattice)
+
+        lattices = simulate(
+            I_i, S_i,
+            n, m,
+            N,
+            n_it=n_it,
+            save_lattices=True
+        )
+
+        np.save(f"outputs/lattice_uni_src_{n_it}_{mu}.npy", lattices)
+
+    analysis_unidirectional_source(m, n_it)
+
+def analysis_unidirectional_source(m=8, n_it=3):
+    m = int(m)
+    n_it = int(n_it)
+
+    fig, ax = plt.subplots(figsize=(6,18), nrows=m, ncols=n_it+1)
+
+    for mu in range(m):
+        lattices_mu = np.load(f"outputs/lattice_uni_src_{n_it}_{mu}.npy", allow_pickle=True)
+        print(lattices_mu)
+        print(len(lattices_mu))
+        for i, lattice in enumerate(lattices_mu):
+            if i > n_it:
+                break
+
+            lattice[4,4,:] = 0.25 * np.sum(lattice)
+            ax[mu][i].imshow(lattice.sum(axis=2))
+
+            ax[mu][i].set_title(f"Direction {mu} - Iteration {i}")
+
+    # plt.show()
+    plt.savefig(f"outputs/plot_uni_src_{n_it}_{m}.png", dpi=500)
+
 # Isotropic source test
 def test_isotropic_source(n=2, m=8, N=None, n_it=3):
     n = int(n)
@@ -75,6 +131,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
     src_lattice = np.zeros(shape=(*N, m))
     src_lattice[*[N_i//2 for N_i in N], :] = 1
     plt.imshow(np.sum(src_lattice, axis=2))
+
     S_i = lattice_to_vector(src_lattice)
 
     lattices = simulate(
@@ -89,7 +146,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
 
     analysis_isotropic_source(n_it)
 
-def analysis_isotropic_source(n_it=5):
+def analysis_isotropic_source(n_it=3):
     n_it = int(n_it)
 
     lattices = np.load(f"outputs/lattice_iso_source_{n_it}.npy")

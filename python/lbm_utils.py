@@ -16,28 +16,36 @@ def compute_scheme_velocities(n, m):
     match n:
         case 1:
             if m == 2:
-                idxs_dir = [0, 1]
-                cxs = [1, -1]
-                cs = cxs
+                idxs_dir = [0,  1]
+                cxs      = [1, -1]
+                cs       = cxs
             else:
-                raise ValueError("Only m=2 is supported for 1D lattices. Did you mean to pick a higher-dimensional lattice?")
+                raise ValueError(f"Angular discretization m={m} is not supported for 1D lattices. Please choose from: m=2")
         case 2:
-            if m == 8:
-                idxs_dir     = [0, 4,  1,  5, 2,  6,  3,  7]
-                cxs = [1, 0, -1,  0, 1, -1, -1,  1]
-                cys = [0, 1,  0, -1, 1,  1, -1, -1]
+            if m == 4: # TESTING PURPOSES ONLY: In D2Q8, 0 2 5 7 work, 1 3 4 6 don't work as expected
+                idxs_dir = [1,  3, 4,  6]
+                cxs      = [0,  0, 1, -1]
+                cys      = [1, -1, 1, -1]
+            elif m == 8:
+                idxs_dir = [0, 4,  1,  5, 2,  6,  3,  7]
+                cxs      = [1, 0, -1,  0, 1, -1, -1,  1]
+                cys      = [0, 1,  0, -1, 1,  1, -1, -1]
             elif m == 16:
-                idxs_dir     = [0, 4,  1,  5, 2,  6,  3,  7, 8, 9, 10, 11, 12, 13, 14, 15]
-                cxs = [1, 0, -1,  0, 1, -1, -1,  1, 2, 1, -1, -2, -2, -1,  1,  2]
-                cys = [0, 1,  0, -1, 1,  1, -1, -1, 1, 2,  2,  1, -1, -2, -2, -1]
+                idxs_dir = [0, 4,  1,  5, 2,  6,  3,  7, 8, 9, 10, 11, 12, 13, 14, 15]
+                cxs      = [1, 0, -1,  0, 1, -1, -1,  1, 2, 1, -1, -2, -2, -1,  1,  2]
+                cys      = [0, 1,  0, -1, 1,  1, -1, -1, 1, 2,  2,  1, -1, -2, -2, -1]
+            else:
+                raise ValueError(f"Angular discretization m={m} is not supported for 2D lattices. Please choose from: m=8, m=16")
 
             cs = list(zip(cxs, cys))
         case 3:
             if m == 18:
-                idxs_dir     = [ 0,  1,  2,  3,  4,  5,  6,  7,  8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-                cxs = [-1,  0,  0, -1, -1, -1, -1,  0,  0, 1,  0,  0,  1,  1,  1,  1,  0,  0]
-                cys = [ 0, -1,  0, -1,  1,  0,  0, -1, -1, 0,  1,  0,  1, -1,  0,  0,  1,  1]
-                czs = [ 0,  0, -1,  0,  0, -1,  1, -1,  1, 0,  0,  1,  0,  0,  1, -1,  1, -1]
+                idxs_dir = [ 0,  1,  2,  3,  4,  5,  6,  7,  8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+                cxs      = [-1,  0,  0, -1, -1, -1, -1,  0,  0, 1,  0,  0,  1,  1,  1,  1,  0,  0]
+                cys      = [ 0, -1,  0, -1,  1,  0,  0, -1, -1, 0,  1,  0,  1, -1,  0,  0,  1,  1]
+                czs      = [ 0,  0, -1,  0,  0, -1,  1, -1,  1, 0,  0,  1,  0,  0,  1, -1,  1, -1]
+            else:
+                raise ValueError(f"Angular discretization m={m} is not supported for 3D lattices. Please choose from: m=18")
 
             cs = list(zip(cxs, cys, czs))
 
@@ -54,7 +62,12 @@ def compute_scheme_boundaries(n, m):
             else:
                 raise ValueError("Only m=2 is supported for 1D lattices. Did you mean to pick a higher-dimensional lattice?")
         case 2:
-            if m == 8:
+            if m == 4:
+                boundary_idxs_left = []
+                boundary_idxs_right = []
+                boundary_idxs_top = []
+                boundary_idxs_bottom = []
+            elif m == 8:
                 boundary_idxs_left = [2, 5, 6]
                 boundary_idxs_right = [0, 4, 7]
                 boundary_idxs_top = [1, 4, 5]

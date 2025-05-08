@@ -46,14 +46,14 @@ def analysis_point_source_1D(n_it=10, sep_dirs=True):
 
     fig, ax = plt.subplots(nrows=n_it+1)
 
-    for i, lattice in enumerate(lattices):
+    for it, lattice in enumerate(lattices):
         if sep_dirs:
-            ax[i].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red")
-            ax[i].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue")
+            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red")
+            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue")
         else:
-            ax[i].scatter(np.arange(lattice.shape[0]), np.sum(lattice, axis=1))
+            ax[it].scatter(np.arange(lattice.shape[0]), np.sum(lattice, axis=1))
 
-        ax[i].set_title(f"Iteration {i}")
+        ax[it].set_title(f"Iteration {it}")
 
     plt.show()
 
@@ -71,14 +71,16 @@ def test_unidirectional_source(n=2, m=8, N=None, n_it=3):
 
     M = np.prod(N)
 
+    # @TODO - apply multiprocessing
+    lattices = [] # shape (mu, n_it+1, *N, m)
     for mu in range(m):
         I_i = np.zeros(shape=(M, m))
 
         src_lattice = np.zeros(shape=(*N, m))
-        src_lattice[N[0]//2, N[1]//2, mu] = 1
+        src_lattice[*[Ni//2 for Ni in N], mu] = 1
         S_i = lattice_to_vector(src_lattice)
 
-        lattices = simulate(
+        lattices_mu = simulate(
             I_i, S_i,
             n, m,
             N,
@@ -86,7 +88,9 @@ def test_unidirectional_source(n=2, m=8, N=None, n_it=3):
             save_lattices=True
         )
 
-        np.save(f"outputs/lattice_uni_src_{n_it}_{mu}.npy", lattices)
+        lattices.append(lattices_mu)
+
+    np.save(f"outputs/lattice_uni_src_{n_it}_{m}.npy", lattices)
 
     analysis_unidirectional_source(m, n_it)
 
@@ -96,21 +100,70 @@ def analysis_unidirectional_source(m=8, n_it=3):
 
     fig, ax = plt.subplots(figsize=(6,18), nrows=m, ncols=n_it+1)
 
+    lattices = np.load(f"outputs/lattice_uni_src_{n_it}_{m}.npy", allow_pickle=True)
+    N = lattices.shape[2:-1]
+    print(lattices.shape)
+    print(lattices.shape[2:-1])
     for mu in range(m):
-        lattices_mu = np.load(f"outputs/lattice_uni_src_{n_it}_{mu}.npy", allow_pickle=True)
-        print(lattices_mu)
-        print(len(lattices_mu))
-        for i, lattice in enumerate(lattices_mu):
-            if i > n_it:
-                break
+        print("/"*20 + " " + str(mu) + " " + "/"*20)
+        lattices_mu = lattices[mu]
+        for it, lattice in enumerate(lattices_mu):
+            spwn = lattice[:,:,mu]
+            sumspwn = np.sum(spwn)
+            sums = np.sum(lattice)
+            lttc = np.sum(np.sum(lattice, axis=0), axis=0)
+            print(it, sumspwn, sums, "-", lttc)
 
-            lattice[4,4,:] = 0.25 * np.sum(lattice)
-            ax[mu][i].imshow(lattice.sum(axis=2))
+            lattice[*[Ni//2 for Ni in N] ,:] = 0.25 * np.sum(lattice)
+            ax[mu][it].imshow(lattice.sum(axis=2))
 
-            ax[mu][i].set_title(f"Direction {mu} - Iteration {i}")
+            ax[mu][it].set_title(f"Direction {mu} - Iteration {it}")
 
-    # plt.show()
     plt.savefig(f"outputs/plot_uni_src_{n_it}_{m}.png", dpi=500)
+    plt.show()
+
+# Angular redistribution spread test
+def test_redistribution_spread(n=2, m=8, mu_0=0, alpha=0.33, N=None, n_it=3):
+    n = int(n)
+    m = int(m)
+
+    mu_0 = int(mu_0)
+    alpha = float(alpha)
+
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    n_it = int(n_it)
+
+    M = np.prod(N)
+    angular_redistribution_coefficients = np.zeros((m,m))
+
+    for mu in range(m):
+        mu_next = (mu + 1) % m
+        mu_prev = (mu - 1) % m
+
+        angular_redistribution_coefficients[mu, mu] = alpha
+        angular_redistribution_coefficients[mu, mu_next] = (1-alpha)/2
+        angular_redistribution_coefficients[mu, mu_prev] = (1-alpha)/2
+
+    I_i = np.zeros(shape=(M, m))
+
+    src_lattice = np.zeros(shape=(*N, m))
+    src_lattice[*[Ni//2 for Ni in N], mu_0] = 1
+    S_i = lattice_to_vector(src_lattice)
+
+    lattices = simulate(
+        I_i, S_i,
+        n, m,
+        N,
+        n_it=n_it,
+        angular_redistribution_coefficients=angular_redistribution_coefficients,
+        save_lattices=True
+    )
+
+    np.save(f"outputs/lattice_redist_spread_{n_it}_{m}_{mu}.npy", lattices)
 
 # Isotropic source test
 def test_isotropic_source(n=2, m=8, N=None, n_it=3):
@@ -153,10 +206,10 @@ def analysis_isotropic_source(n_it=3):
 
     fig, ax = plt.subplots(ncols=n_it+1)
 
-    for i, lattice in enumerate(lattices):
-        ax[i].imshow(lattice.sum(axis=2))
+    for it, lattice in enumerate(lattices):
+        ax[it].imshow(lattice.sum(axis=2))
 
-        ax[i].set_title(f"Iteration {i}")
+        ax[it].set_title(f"Iteration {it}")
 
     plt.show()
 

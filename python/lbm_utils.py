@@ -18,16 +18,17 @@ def compute_scheme_velocities(n, m):
             if m == 2:
                 idxs_dir = [0,  1]
                 cxs      = [1, -1]
-                cs       = cxs
             else:
                 raise ValueError(f"Angular discretization m={m} is not supported for 1D lattices. Please choose from: m=2")
+
+            cs = cxs
         case 2:
-            if m == 4: # TESTING PURPOSES ONLY: In D2Q8, 0 2 5 7 work, 1 3 4 6 don't work as expected
-                idxs_dir = [1,  3, 4,  6]
-                cxs      = [0,  0, 1, -1]
-                cys      = [1, -1, 1, -1]
+            if m == 4:
+                idxs_dir = [0, 1,  2,  3]
+                cxs      = [1, 0, -1,  0]
+                cys      = [0, 1,  0, -1]
             elif m == 8:
-                idxs_dir = [0, 4,  1,  5, 2,  6,  3,  7]
+                idxs_dir = [0, 1,  2,  3, 4,  5,  6,  7]
                 cxs      = [1, 0, -1,  0, 1, -1, -1,  1]
                 cys      = [0, 1,  0, -1, 1,  1, -1, -1]
             elif m == 16:
@@ -35,7 +36,7 @@ def compute_scheme_velocities(n, m):
                 cxs      = [1, 0, -1,  0, 1, -1, -1,  1, 2, 1, -1, -2, -2, -1,  1,  2]
                 cys      = [0, 1,  0, -1, 1,  1, -1, -1, 1, 2,  2,  1, -1, -2, -2, -1]
             else:
-                raise ValueError(f"Angular discretization m={m} is not supported for 2D lattices. Please choose from: m=8, m=16")
+                raise ValueError(f"Angular discretization m={m} is not supported for 2D lattices. Please choose from: m=4, m=8, m=16")
 
             cs = list(zip(cxs, cys))
         case 3:
@@ -63,10 +64,10 @@ def compute_scheme_boundaries(n, m):
                 raise ValueError("Only m=2 is supported for 1D lattices. Did you mean to pick a higher-dimensional lattice?")
         case 2:
             if m == 4:
-                boundary_idxs_left = []
-                boundary_idxs_right = []
-                boundary_idxs_top = []
-                boundary_idxs_bottom = []
+                boundary_idxs_left = [2]
+                boundary_idxs_right = [0]
+                boundary_idxs_top = [1]
+                boundary_idxs_bottom = [3]
             elif m == 8:
                 boundary_idxs_left = [2, 5, 6]
                 boundary_idxs_right = [0, 4, 7]

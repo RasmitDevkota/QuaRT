@@ -24,6 +24,7 @@ def simulate(
     n_it=1,
     delta_t=1,
     kappa=1,
+    angular_redistribution_coefficients=None,
     save_lattices=False
 ):
     # 1. Lattice utilities
@@ -40,7 +41,7 @@ def simulate(
     if S_i is None:
         S_i = np.zeros(shape=(M, m))
 
-    # 3. QuantumCircuit
+    # 3. Quantum system construction
     n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla = compute_memory_requirements(m, M_0)
 
     qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla, creg_measure, qreg_head = allocate_registers(n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla)
@@ -63,9 +64,10 @@ def simulate(
     PCircuit = propagation(
         n, m,
         N, M,
-        cs,
+        idxs_dir, cs,
         idx_coord_map, coord_idx_map, m_max_bin,
-        n_qubits_direction, n_qubits_switch,
+        angular_redistribution_coefficients,
+        n_qubits_direction, n_qubits_switch, n_qubits_lattice,
         qreg_lattice, qreg_direction, qreg_switch,
         verbose=True
     )
@@ -132,11 +134,11 @@ def simulate(
         print("--- constructing circuit", time.time())
 
         # @TODO - figure out whether or not some sort of condition is needed here
-        #         (seems like we may be getting the backwards power law problem again)
+        #         (seems like we may be getting the backwards power law problem in some tests)
         if it >= 0:
             print("trying to recover intensities and sources:\n", I_prev, "\n", S_prev)
             SPCircuit = state_preparation(
-                I_prev, S_prev if it <= 20 else np.zeros((M,m)),
+                I_prev, S_prev if it <= 1 else np.zeros((M,m)),
                 m,
                 delta_t,
                 coord_idx_map, m_max_bin,
@@ -153,14 +155,7 @@ def simulate(
         # print("Recovered statevector:", statevector_to_str(np.array(recovered_statevector)))
 
         # At the zeroth iteration, we only do state preparation
-        if it == 1:
-            qc = qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
-            qc.barrier()
-            qc = qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:])
-            qc.barrier()
-            qc = qc.compose(PCircuit, qreg_lattice[:] + qreg_direction[:] + qreg_switch[:])
-            qc.barrier()
-        elif it > 1:
+        if it >= 1:
             qc = qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
             qc = qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:])
@@ -180,6 +175,7 @@ def simulate(
         print("--- transpiling and running", time.time())
 
         qc_transpiled = transpile(qc_meas, aer_sim, optimization_level=0)
+        # print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
         result = aer_sim.run(qc_transpiled, shots=1E4).result()
         counts = result.get_counts(qc_transpiled)
 

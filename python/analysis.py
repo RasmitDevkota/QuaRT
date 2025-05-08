@@ -20,17 +20,18 @@ def measurements_to_lattice(
 	for outcome, count in counts.items():
 		outcome_ancilla_bin = "".join(outcome[l] for l in ancilla_qubits)
 		outcome_switch_bin = "".join(outcome[l] for l in switch_qubits)
+
 		if outcome[:3] == "000" and outcome[switch_qubits[0]] == "0":
 			lattice_point_bin = "".join(outcome[l] for l in lattice_qubits)
 			lattice_point = idx_coord_map[lattice_point_bin]
 
-			lattice_direction_bin = "".join(outcome[l] for l in direction_qubits)
+			lattice_direction_bin = "".join(outcome[l] for l in direction_qubits)[::-1]
 			mu = int(lattice_direction_bin, 2)
 			
 			lattice[*lattice_point, mu] += count
 			
 			if verbose:
-                print(f"Counts for outcome {outcome} at point {lattice_point_bin} ({lattice_point}), in direction {mu}: {count}")
+				print(f"Counts for outcome {outcome} at point {lattice_point_bin} ({lattice_point}), in direction {mu} ({lattice_direction_bin}): {count}")
 
 	return lattice
 

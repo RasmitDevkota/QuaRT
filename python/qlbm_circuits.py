@@ -148,9 +148,10 @@ def absorption_emission(I_2M, Z_2M, qreg_switch, qreg_ancilla):
 def propagation(
     n, m,
     N, M,
-    cs,
+    idxs_dir, cs,
     idx_coord_map, coord_idx_map, m_max_bin,
-    n_qubits_direction, n_qubits_switch,
+    angular_redistribution_coefficients,
+    n_qubits_direction, n_qubits_switch, n_qubits_lattice,
     qreg_lattice, qreg_direction, qreg_switch,
     verbose=False
 ):
@@ -160,22 +161,51 @@ def propagation(
     cpu_count = mp.cpu_count()
     batch_size = max(int(np.ceil(m/cpu_count)), 1)
 
+    # If there are more than one non-zero entries, we use angular redistribution
+    with_angular_redistribution = False
+    if angular_redistribution_coefficients is not None:
+        if any([np.count_nonzero(angular_redistribution_coefficients[mu]) > 1 for mu in range(m)]):
+            with_angular_redistribution = True
+
+            print("Propagating with angular redistribution")
+
     pool = mp.Pool(cpu_count)
-    results = pool.starmap(
-        single_direction_propagation,
-        [
-            (
-                mu,
-                n, m, N, M,
-                cs,
-                idx_coord_map, coord_idx_map, m_max_bin,
-                n_qubits_direction, n_qubits_switch,
-                qreg_lattice, qreg_direction, qreg_switch,
-                verbose
-            )
-            for mu in range(0, m, batch_size)
-        ]
-    )
+    if with_angular_redistribution:
+        results = pool.starmap(
+            single_direction_propagation_angular_redistribution,
+            [
+                (
+                    mu,
+                    n, m,
+                    N, M,
+                    idxs_dir, cs,
+                    idx_coord_map, coord_idx_map, m_max_bin,
+                    angular_redistribution_coefficients,
+                    n_qubits_direction, n_qubits_switch, n_qubits_lattice,
+                    qreg_lattice, qreg_direction, qreg_switch,
+                    verbose
+                )
+                for mu in range(0, m, batch_size)
+            ]
+        )
+    else:
+        results = pool.starmap(
+            single_direction_propagation,
+            [
+                (
+                    mu,
+                    n, m,
+                    N, M,
+                    cs,
+                    idx_coord_map, coord_idx_map, m_max_bin,
+                    n_qubits_direction, n_qubits_switch,
+                    qreg_lattice, qreg_direction, qreg_switch,
+                    verbose
+                )
+                for mu in range(0, m, batch_size)
+            ]
+        )
+
     single_direction_propagation_gates = [result[0] for result in results]
     single_direction_propagation_gate_qubits = [result[1] for result in results]
     # print(single_direction_propagation_gates)
@@ -198,11 +228,11 @@ def single_direction_propagation(
 ):
     P_mu = np.zeros((M, M))
 
-    c_mu = cs[mu]
-
     mu_bin = bin(mu)[2:].zfill(len(m_max_bin))
     if verbose:
         print(f"Process {mp.current_process().name} processing direction {mu} (binary {mu_bin})")
+
+    c_mu = cs[mu]
 
     for idx_init_bin, coord_init in idx_coord_map.items():
         # Periodic BCs
@@ -223,23 +253,147 @@ def single_direction_propagation(
 
         P_mu[idx_init_dec, idx_dest_dec] = 1
 
+    # @TODO - verify byte-Endianness on the ctrl_state - it seems to not matter?
     ctrl_switch = "0"
-    ctrl_direction = mu_bin#[::-1]
+    ctrl_direction = mu_bin
     ctrl_state = ctrl_direction + ctrl_switch
-
     print(ctrl_state)
 
     print("---")
+
+    print(time.time())
+
+    # P_mu_circuit only acts on the lattice qubits
     P_mu_circuit = QuantumCircuit(qreg_lattice)
     P_mu_circuit.unitary(P_mu, qreg_lattice[:])
+
+    # CP_mu_circuit acts on the lattice qubits, but appropriately controlled by the direction and switch qubits
+    CP_mu_circuit = P_mu_circuit.control(n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state)
+    CP_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
+
     print(time.time())
-    CP_mu_circuit = P_mu_circuit.control(n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state), qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
+
+    return CP_mu_circuit, CP_mu_qubits
+
+def single_direction_propagation_angular_redistribution(
+    mu0,
+    n, m,
+    N, M,
+    idxs_dir, cs,
+    idx_coord_map, coord_idx_map, m_max_bin,
+    angular_redistribution_coefficients,
+    n_qubits_direction, n_qubits_switch, n_qubits_lattice,
+    qreg_lattice, qreg_direction, qreg_switch,
+    verbose=False
+):
+    print("="*80)
+
+    dim_P_mu = 2**(n_qubits_lattice + n_qubits_direction)
+    P_mu = np.zeros((dim_P_mu, dim_P_mu))
+
+    mu0_idx = idxs_dir[mu0]
+    mu0_bin = bin(mu0)[2:].zfill(len(m_max_bin))
+    c_mu = cs[mu0]
+    if verbose:
+        print(f"Process {mp.current_process().name} processing direction {mu0} (binary {mu0_bin})")
+
+    # The adjacent indices can be accessed using integer deltas
+    match n:
+        case 1:
+            idx_deltas = [0]
+
+            mu_adj_idxs = [mu0_idx]
+        case 2:
+            idx_deltas = [+1, 0, -1]
+
+            mu_adj_idxs = [(mu0_idx + idx_delta) % m for idx_delta in idx_deltas]
+        case 3:
+            # @TODO - determine which is better (first is easier to use, second may be more accurate)
+            idx_deltas = [(1,0), (0,1), (-1,0), (0,-1)]
+            # idx_deltas = [(1,0), (0,1), (-1,0), (0,-1), (1,1), (-1,1), (-1,-1), (1,-1)]
+
+            mu_adj_idxs = [(list(np.array(mu0_idx) + np.array(idx_delta))) % m for idx_delta in idx_deltas]
+
+    mu_adjs = [idxs_dir[mu_adj_idx] for mu_adj_idx in mu_adj_idxs]
+    mu_adj_bins = [bin(mu_adj)[2:].zfill(len(m_max_bin)) for mu_adj in mu_adjs]
+    c_adjs = [cs[mu_adj] for mu_adj in mu_adjs]
+
+    ctrl_switch = "0"
+    ctrl_direction = mu0_bin
+
+    # Loop through each initial coordinate
+    for idx_init_bin, coord_init in idx_coord_map.items():
+        # Compute destination coordinate using periodic BCs
+        if n == 1:
+            coord_dest = ((coord_init[0] + c_mu) % N[0],)
+        else:
+            coord_dest = tuple((coord_init[i] + c_mu[i]) % N[i] for i in range(n))
+
+        # Compute binary string representation of destination coordinate index
+        idx_dest_bin = coord_idx_map[coord_dest]
+
+        # Loop through adjacent directions
+        for mu_adj, mu_adj_bin in zip(mu_adjs, mu_adj_bins):
+            # Get the full binary string representation of the initial and final coordinate+direction state
+            full_init_bin = idx_init_bin + ctrl_direction# + ctrl_switch
+            full_dest_bin = idx_dest_bin + mu_adj_bin# + ctrl_switch
+
+            # Get the decimal value of the above binary strings - these are the matrix indices in P_mu
+            full_init_dec = int(f"0b{full_init_bin[::-1]}", 2)
+            full_dest_dec = int(f"0b{full_dest_bin[::-1]}", 2)
+
+            # if verbose:
+            #     print(coord_init, coord_dest)
+            #     print(mu_adj_bin, full_init_bin, full_dest_bin)
+            #     print(mu_adj_bin, full_init_dec, full_dest_dec)
+
+            # Set entry of P_mu to corresponding angular redistribution coefficient
+            P_mu[full_init_dec, full_dest_dec] = angular_redistribution_coefficients[mu0][mu_adj]
+
+            print(f"redistributing {angular_redistribution_coefficients[mu0][mu_adj]} at {coord_init} from direction {mu0} to {mu_adj} {mu_adj_bin},", full_init_bin, full_dest_bin)
+
+            print("-")
+
+        print("-"*20)
+
+    print(dim_P_mu, P_mu)
+
+    for i in range(dim_P_mu):
+        colsum = np.count_nonzero(P_mu[:,i])
+        rowsum = np.count_nonzero(P_mu[i,:])
+
+        print("col", i, "has sum", colsum)
+        print("row", i, "has sum", rowsum)
+
+        # if colsum == 0 and rowsum == 0:
+        print(bin(i))
+
+        print("===")
+
+    print("---")
+
     print(time.time())
 
-    # P_mu_gate = UnitaryGate(P_mu, label="$P_\\mu$").control(n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state)
-    # qc.append(P_mu_gate, qreg_switch[:] + qreg_direction[:] + qreg_lattice[:])
+    # # P_mu_circuit acts on the lattice qubits, but appropriately controlled by the direction and switch qubits
+    # P_mu_circuit = QuantumCircuit(n_qubits_lattice, n_qubits_direction + n_qubits_switch)
+    # P_mu_circuit.unitary(P_mu, qreg_lattice[:])
+    #
+    # P_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
+    #
+    # print(time.time())
+    #
+    # return P_mu_circuit, P_mu_qubits
 
-    # print(P_mu_gate.label)
+    # P_mu_circuit only acts on the lattice and direction qubits
+    P_mu_circuit = QuantumCircuit(qreg_lattice, qreg_direction)
+    P_mu_circuit.unitary(P_mu, qreg_direction[:] + qreg_lattice[:])
 
-    return CP_mu_circuit
+    # CP_mu_circuit acts on the lattice and direction qubits, but appropriately controlled by the switch qubits
+    ctrl_state = "0"
+    CP_mu_circuit = P_mu_circuit.control(n_qubits_switch, ctrl_state=ctrl_state)
+    CP_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
+
+    print(time.time())
+
+    return CP_mu_circuit, CP_mu_qubits
 

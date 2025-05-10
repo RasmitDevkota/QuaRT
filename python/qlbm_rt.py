@@ -138,7 +138,7 @@ def simulate(
         if it >= 0:
             print("trying to recover intensities and sources:\n", I_prev, "\n", S_prev)
             SPCircuit = state_preparation(
-                I_prev, S_prev if it <= 1 else np.zeros((M,m)),
+                I_prev, S_prev if it >= 0 else np.zeros((M,m)),
                 m,
                 delta_t,
                 coord_idx_map, m_max_bin,

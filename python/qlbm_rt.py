@@ -1,5 +1,5 @@
 import numpy as np
-np.set_printoptions(linewidth=1000)
+np.set_printoptions(linewidth=10000)
 
 import matplotlib.pyplot as plt
 
@@ -12,7 +12,7 @@ from qiskit.visualization import plot_histogram
 
 from statevector_to_str import statevector_to_str
 
-from qlbm_circuits import state_preparation, absorption_scattering, absorption_emission, propagation
+from qlbm_circuits import state_preparation, absorption_scattering, absorption_scattering_scattering, absorption_emission, propagation
 from qlbm_utils import compute_memory_requirements, allocate_registers, compute_binary_representations, map_indices_coordinates, construct_identity_matrices
 from lbm_utils import compute_grid_parameters, compute_scheme_velocities, compute_scheme_boundaries
 from analysis import measurements_to_lattice, statevector_analysis
@@ -23,8 +23,10 @@ def simulate(
     N,
     n_it=1,
     delta_t=1,
-    kappa=1,
+    kappa=0.0,
+    sigma=0.1,
     angular_redistribution_coefficients=None,
+    boundary_conditions=None,
     save_lattices=False
 ):
     # 1. Lattice utilities
@@ -50,23 +52,34 @@ def simulate(
     I_2, I_M, I_2M, I_4M, Z_2M = construct_identity_matrices(M)
 
     # Absorption-Scattering, Absorption-Emission, and Propagation circuits are constant for time-independent simulation setups
-    ASCircuit = absorption_scattering(
-        kappa, delta_t,
-        I_2,
-        n_qubits_direction,
-        qreg_direction, qreg_switch, qreg_ancilla
-    )
+    if sigma > 0.0:
+        ASCircuit = absorption_scattering_scattering(
+            kappa, sigma, delta_t,
+            I_2,
+            n_qubits_direction,
+            qreg_direction, qreg_switch, qreg_ancilla
+        )
+    else:
+        ASCircuit = absorption_scattering(
+            kappa, delta_t,
+            I_2,
+            n_qubits_direction,
+            qreg_direction, qreg_switch, qreg_ancilla
+        )
+
     AECircuit = absorption_emission(
         I_2M, Z_2M,
         qreg_switch,
         qreg_ancilla
     )
+
     PCircuit = propagation(
         n, m,
         N, M,
         idxs_dir, cs,
         idx_coord_map, coord_idx_map, m_max_bin,
         angular_redistribution_coefficients,
+        boundary_idxs, boundary_conditions,
         n_qubits_direction, n_qubits_switch, n_qubits_lattice,
         qreg_lattice, qreg_direction, qreg_switch,
         verbose=True
@@ -151,8 +164,28 @@ def simulate(
             )
             qc.barrier()
 
-        # recovered_statevector = Statevector(qc)
-        # print("Recovered statevector:", statevector_to_str(np.array(recovered_statevector)))
+        recovered_statevector = np.array(Statevector(qc))
+        recovered_string = statevector_to_str(recovered_statevector)
+        print("Recovered statevector:", recovered_string)
+        recovered_amplitudes = np.nan_to_num(recovered_statevector, nan=0.0)
+        recovered_amplitudes /= np.min(recovered_amplitudes)
+        recovered_outcomes = [ket[5:-1] for ket in recovered_string.split(" + ")]
+
+        # recovered_probabilities = [np.linalg.norm(recovered_amplitude)**2 for recovered_amplitude in recovered_amplitudes]
+        recovered_probabilities = [float(np.linalg.norm(float(ket[:4]))**2) for ket in recovered_string.split(" + ")]
+
+        recovered_counts_list = [recovered_probability*1E4 for recovered_probability in recovered_probabilities]
+
+        recovered_outcomes = [ket[5:-1] for ket in recovered_string.split(" + ")]
+        recovered_counts = dict(zip(recovered_outcomes, recovered_counts_list))
+        print(recovered_counts)
+        print(measurements_to_lattice(
+            m, N,
+            recovered_counts,
+            idx_coord_map,
+            lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+            verbose=True
+        ))
 
         # At the zeroth iteration, we only do state preparation
         if it >= 1:

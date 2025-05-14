@@ -22,9 +22,10 @@ def test_point_source_1D(N=None, n_it=10):
     M = 2**int(np.ceil(np.log2(M_0)))
 
     I_i = np.zeros(shape=(M, m))
+    I_i[N[0]//2, :] = 1
 
     src_lattice = np.zeros(shape=(*N, m))
-    src_lattice[N[0]//2, :] = 1
+    # src_lattice[N[0]//2, :] = 1
     S_i = lattice_to_vector(src_lattice)
 
     lattices = simulate(
@@ -115,7 +116,7 @@ def analysis_unidirectional_source(m=8, n_it=3):
             print(it, sumspwn, sums, "-", lttc)
 
             lattice[*[Ni//2 for Ni in N] ,:] = 0.25 * np.sum(lattice)
-            ax[mu][it].imshow(lattice.sum(axis=2))
+            ax[mu][it].imshow(lattice.sum(axis=2).T)
 
             ax[mu][it].set_title(f"Direction {mu} - Iteration {it}")
 
@@ -163,7 +164,23 @@ def test_redistribution_spread(n=2, m=8, mu_0=0, alpha=0.33, N=None, n_it=3):
         save_lattices=True
     )
 
-    np.save(f"outputs/lattice_redist_spread_{n_it}_{m}_{mu}.npy", lattices)
+    np.save(f"outputs/lattice_redist_spread_{n_it}_{m}_{mu_0}.npy", lattices)
+
+    analysis_redistribution_spread(m, mu_0, n_it)
+
+def analysis_redistribution_spread(m=8, mu_0=0, n_it=3):
+    n_it = int(n_it)
+
+    lattices = np.load(f"outputs/lattice_redist_spread_{n_it}_{m}_{mu_0}.npy")
+
+    fig, ax = plt.subplots(ncols=n_it+1)
+
+    for it, lattice in enumerate(lattices):
+        ax[it].imshow(lattice.sum(axis=2).T[:, ::-1])
+
+        ax[it].set_title(f"Iteration {it}")
+
+    plt.show()
 
 # Isotropic source test
 def test_isotropic_source(n=2, m=8, N=None, n_it=3):
@@ -183,7 +200,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
 
     src_lattice = np.zeros(shape=(*N, m))
     src_lattice[*[N_i//2 for N_i in N], :] = 1
-    plt.imshow(np.sum(src_lattice, axis=2))
+    plt.imshow(np.sum(src_lattice, axis=2).T)
 
     S_i = lattice_to_vector(src_lattice)
 
@@ -207,19 +224,191 @@ def analysis_isotropic_source(n_it=3):
     fig, ax = plt.subplots(ncols=n_it+1)
 
     for it, lattice in enumerate(lattices):
-        ax[it].imshow(lattice.sum(axis=2))
+        ax[it].imshow(lattice.sum(axis=2).T)
 
         ax[it].set_title(f"Iteration {it}")
 
     plt.show()
 
 # Crossing radiation beams test
-def test_crossing_radiation_beams():
-    raise NotImplementedError()
+def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
+    n = int(n)
+    if n != 2:
+        raise ValueError(f"Crossing radiation beams test isn't implemented for n={n}")
+
+    m = int(m)
+
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    # Beam half-width computation
+    if hw is None:
+        hw = int(1/2 * N[0]//3)
+    else:
+        hw = int(hw)
+
+    n_it = int(n_it)
+
+    M = np.prod(N)
+
+    I_i = np.zeros(shape=(M, m))
+
+    src_lattice = np.zeros(shape=(*N, m))
+
+    beam_profile_linear = lambda jval, kval : jval - np.abs(kval)
+    beam_profile_normal = lambda jval, kval : np.exp(-k**2)
+
+    for x in range(-hw, hw+1):
+        if m == 8:
+            src_lattice[1*N[0]//3+x, N[1]-2, 5] = beam_profile_linear(hw, x)
+            src_lattice[2*N[0]//3+x, N[1]-2, 4] = beam_profile_linear(hw, x)
+        elif m == 16:
+            src_lattice[1*N[0]//4+x, N[1]-1, 6] = hw-np.abs(x)
+            src_lattice[3*N[0]//4+x, N[1]-1, 7] = hw-np.abs(x)
+
+    plt.imshow(np.sum(src_lattice, axis=2).T)
+
+    S_i = lattice_to_vector(src_lattice)
+
+    lattices = simulate(
+        I_i, S_i,
+        n, m,
+        N,
+        n_it=n_it,
+        save_lattices=True
+    )
+
+    np.save(f"outputs/lattice_crb_{n_it}_{N[0]}-{N[1]}_{hw}.npy", lattices)
+
+    analysis_crossing_radiation_beams(n_it, N, hw)
+
+def analysis_crossing_radiation_beams(N=None, hw=None, n_it=5):
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    if hw is None:
+        hw = int(1/2 * N[0]//3)
+    else:
+        hw = int(hw)
+
+    n_it = int(n_it)
+
+    lattices = np.load(f"outputs/lattice_crb_{n_it}_{N[0]}-{N[1]}_{hw}.npy")
+
+    ncols = min(n_it+1, 6)
+    fig, ax = plt.subplots(ncols=ncols)
+
+    for it in range(n_it+1):
+        print(it)
+        if n_it <= 5 or (it % ncols) == 0:
+            lattice = lattices[it]
+
+            ax[it].imshow(lattice.sum(axis=2).T)
+
+            ax[it].set_title(f"Iteration {it}")
+
+    plt.show()
 
 # Shadow test
-def test_shadow():
-    raise NotImplementedError()
+def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
+    n = int(n)
+    if n != 2:
+        raise ValueError(f"Shadow test isn't implemented for n={n}")
+
+    m = int(m)
+
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    n_it = int(n_it)
+
+    M = np.prod(N)
+
+    I_i = np.zeros(shape=(M, m))
+
+    src_lattice = np.zeros(shape=(*N, m))
+
+    if source_type is not None and source_type.lower() == "point":
+        # Option 1: Isotropic source near left wall
+        src_lattice[1*N[0]//4, N[1]//2] = 2
+
+        R = np.sqrt((N[0]**2+N[1]**2)/4)
+        a = 0.05
+        b = 0.1
+        h = N[0] / 3
+        k = N[1] / 2
+    else:
+        # Option 2 (default): Construct source on left wall
+        source_type = "wall"
+        if m == 8:
+            # src_lattice[0, :, 0] = 1
+            src_lattice[0, :, 4] = 1
+            src_lattice[0, :, 7] = 1
+        elif m == 16:
+            # src_lattice[0, :, 0] = 1
+            src_lattice[0, :, 7] = 1
+            src_lattice[0, :, 15] = 1
+        else:
+            raise ValueError(f"Shadow test isn't implemented for m={m}")
+
+        R = np.sqrt((N[0]**2+N[1]**2)/2)
+        a = 0.05
+        b = 0.1
+        h = N[0] / 2
+        k = N[1] / 2
+
+    S_i = lattice_to_vector(src_lattice)
+    
+    # Construct opaque ellipse
+    X, Y = np.meshgrid(range(N[0]), range(N[1]))
+    opaque_ellipse = ((X - h)/a) ** 2 + ((Y - k)/b) ** 2 <= R**2
+    kappa = np.zeros((N[0], N[1]))
+    kappa[opaque_ellipse] = 1
+    plt.imshow(kappa)
+
+    boundary_conditions = [("absorb", None)]*4
+
+    lattices = simulate(
+        I_i, S_i,
+        n, m,
+        N,
+        n_it=n_it,
+        kappa=kappa,
+        boundary_conditions=boundary_conditions,
+        save_lattices=True
+    )
+
+    np.save(f"outputs/lattice_shadow-{source_type}_{n_it}_{N[0]}-{N[1]}.npy", lattices)
+
+    analysis_shadow(source_type, N, n_it)
+
+def analysis_shadow(source_type=None, N=None, n_it=5):
+    if source_type is not None and source_type.lower() == "point":
+        source_type = "point"
+    else:
+        source_type = "wall"
+
+    if N is None:
+        N = [8, 8]
+    else:
+        N = [int(d) for d in N.split(",")]
+
+    n_it = int(n_it)
+
+    lattices = np.load(f"outputs/lattice_shadow-{source_type}_{n_it}_{N[0]}-{N[1]}.npy")
+
+    fig, ax = plt.subplots()
+
+    ax.imshow(lattice[-1].sum(axis=2).T)
+    ax.set_title(f"Radiation intensity - Iteration {it}")
+
+    plt.show()
 
 # Amplitude loss test
 def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):

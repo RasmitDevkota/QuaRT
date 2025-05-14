@@ -1,7 +1,7 @@
 import numpy
 
 # Numbers below this threshold will be printed as 0
-ABSOLUTE_TOLERANCE: float = 1e-5
+ABSOLUTE_TOLERANCE: float = 1e-6
 
 def _real2str(num: float, decimals: int, atol: float, force_ones: bool) -> str:
     ret = ""
@@ -42,3 +42,4 @@ def statevector_to_str(
                 coeff=_num2str(statevector[i], decimals, atol), ket=bin2ket(i, n)
             )
     return ret[:-3]
+

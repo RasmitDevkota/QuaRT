@@ -8,8 +8,8 @@ def compute_memory_requirements(m, M_0, verbose=False):
 	n_qubits_lattice = int(np.ceil(np.log2(M_0)))
 	n_qubits_direction = int(np.ceil(np.log2(m)))
 	n_qubits_switch = 1
-	n_qubits_ancilla = 4#3 # @TODO - why 4? maybe just run once?
-	n_qubits = 1 + n_qubits_lattice + n_qubits_direction + n_qubits_switch + n_qubits_ancilla # counting head qubit
+	n_qubits_ancilla = 1 + 2 + 2 + 1 # 1 - AS, 2 - AE, 2 - P, 1 - @TODO unknown?
+	n_qubits = n_qubits_lattice + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
 
 	if verbose:
 		print(f"Total qubits: {n_qubits}")
@@ -21,14 +21,13 @@ def compute_memory_requirements(m, M_0, verbose=False):
 	return n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
 
 def allocate_registers(n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla):
-	qreg_head = QuantumRegister(1, name="H")
 	qreg_lattice = QuantumRegister(n_qubits_lattice, name="L")
 	qreg_direction = QuantumRegister(n_qubits_direction, name="D")
 	qreg_switch = QuantumRegister(n_qubits_switch, name="S")
 	qreg_ancilla = QuantumRegister(n_qubits_ancilla, name="A")
 	creg_measure = ClassicalRegister(n_qubits, name="C")
 
-	return qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla, creg_measure, qreg_head
+	return qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla, creg_measure
 
 def compute_binary_representations(m, M, verbose=False):
 	coordinate_max = M

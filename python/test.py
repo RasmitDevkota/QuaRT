@@ -21,11 +21,12 @@ def test_point_source_1D(N=None, n_it=10):
     M_0 = np.prod(N)
     M = 2**int(np.ceil(np.log2(M_0)))
 
-    I_i = np.zeros(shape=(M, m))
-    I_i[N[0]//2, :] = 1
+    rad_lattice = np.zeros(shape=(*N, m))
+    # rad_lattice[N[0]//2, :] = 1
+    I_i = lattice_to_vector(rad_lattice)
 
     src_lattice = np.zeros(shape=(*N, m))
-    # src_lattice[N[0]//2, :] = 1
+    src_lattice[N[0]//2, :] = 1
     S_i = lattice_to_vector(src_lattice)
 
     lattices = simulate(
@@ -38,9 +39,15 @@ def test_point_source_1D(N=None, n_it=10):
 
     lattices = np.save(f"outputs/lattice_point_src_1D_{n_it}.npy", lattices)
 
-    analysis_point_source_1D(n_it)
+    analysis_point_source_1D(True, n_it)
 
-def analysis_point_source_1D(n_it=10, sep_dirs=True):
+def analysis_point_source_1D(sep_dirs=True, n_it=10):
+    if isinstance(sep_dirs, str):
+        if sep_dirs.lower() in ["true", "yes", "ye", "y", "1"]:
+            sep_dirs = True
+        else:
+            sep_dirs = False
+
     n_it = int(n_it)
 
     lattices = np.load(f"outputs/lattice_point_src_1D_{n_it}.npy")
@@ -49,13 +56,14 @@ def analysis_point_source_1D(n_it=10, sep_dirs=True):
 
     for it, lattice in enumerate(lattices):
         if sep_dirs:
-            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red")
-            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue")
+            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red", marker=">")
+            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue", marker="<")
         else:
             ax[it].scatter(np.arange(lattice.shape[0]), np.sum(lattice, axis=1))
 
         ax[it].set_title(f"Iteration {it}")
 
+    plt.savefig(f"outputs/lattice_point_src_1D_{n_it}.png", dpi=500)
     plt.show()
 
 # Unidirectional radiation test
@@ -103,8 +111,6 @@ def analysis_unidirectional_source(m=8, n_it=3):
 
     lattices = np.load(f"outputs/lattice_uni_src_{n_it}_{m}.npy", allow_pickle=True)
     N = lattices.shape[2:-1]
-    print(lattices.shape)
-    print(lattices.shape[2:-1])
     for mu in range(m):
         print("/"*20 + " " + str(mu) + " " + "/"*20)
         lattices_mu = lattices[mu]
@@ -200,26 +206,36 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
 
     src_lattice = np.zeros(shape=(*N, m))
     src_lattice[*[N_i//2 for N_i in N], :] = 1
-    plt.imshow(np.sum(src_lattice, axis=2).T)
 
     S_i = lattice_to_vector(src_lattice)
+
+    boundary_conditions = [("periodic",None)]*4
+    # boundary_conditions = [("absorb",None)]*4
 
     lattices = simulate(
         I_i, S_i,
         n, m,
         N,
         n_it=n_it,
+        boundary_conditions=boundary_conditions,
         save_lattices=True
     )
 
-    np.save(f"outputs/lattice_iso_source_{n_it}.npy", lattices)
+    np.save(f"outputs/lattice_iso_src_{n_it}_{N[0]}-{N[1]}_{m}.npy", lattices)
 
-    analysis_isotropic_source(n_it)
+    analysis_isotropic_source(N, m, n_it)
 
-def analysis_isotropic_source(n_it=3):
+def analysis_isotropic_source(N=None, m=8, n_it=3):
+    if N is None:
+        N = [8, 8]
+    elif isinstance(N, str):
+        N = [int(d) for d in N.split(",")]
+
+    m = int(m)
+
     n_it = int(n_it)
 
-    lattices = np.load(f"outputs/lattice_iso_source_{n_it}.npy")
+    lattices = np.load(f"outputs/lattice_iso_src_{n_it}_{N[0]}-{N[1]}_{m}.npy")
 
     fig, ax = plt.subplots(ncols=n_it+1)
 
@@ -228,7 +244,10 @@ def analysis_isotropic_source(n_it=3):
 
         ax[it].set_title(f"Iteration {it}")
 
+    plt.savefig(f"outputs/plot_iso_src_{n_it}_{N[0]}-{N[1]}_{m}.png", dpi=500)
     plt.show()
+
+    fit_inv_sq_bg = lambda x, k, y_0 : y_0 + k * np.power(x, -2)
 
 # Crossing radiation beams test
 def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
@@ -240,7 +259,7 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
 
     if N is None:
         N = [8, 8]
-    else:
+    elif isinstance(N, str):
         N = [int(d) for d in N.split(",")]
 
     # Beam half-width computation
@@ -282,28 +301,27 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
 
     np.save(f"outputs/lattice_crb_{n_it}_{N[0]}-{N[1]}_{hw}.npy", lattices)
 
-    analysis_crossing_radiation_beams(n_it, N, hw)
+    analysis_crossing_radiation_beams(N, hw, n_it)
 
 def analysis_crossing_radiation_beams(N=None, hw=None, n_it=5):
     if N is None:
         N = [8, 8]
-    else:
+    elif isinstance(N, str):
         N = [int(d) for d in N.split(",")]
 
     if hw is None:
         hw = int(1/2 * N[0]//3)
-    else:
+    elif isinstance(hw, str):
         hw = int(hw)
 
     n_it = int(n_it)
 
-    lattices = np.load(f"outputs/lattice_crb_{n_it}_{N[0]}-{N[1]}_{hw}.npy")
+    lattices = np.load(f"outputs/lattice_crb_{n_it}_{n[0]}-{n[1]}_{hw}.npy")
 
     ncols = min(n_it+1, 6)
     fig, ax = plt.subplots(ncols=ncols)
 
     for it in range(n_it+1):
-        print(it)
         if n_it <= 5 or (it % ncols) == 0:
             lattice = lattices[it]
 
@@ -347,13 +365,13 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
         # Option 2 (default): Construct source on left wall
         source_type = "wall"
         if m == 8:
-            # src_lattice[0, :, 0] = 1
-            src_lattice[0, :, 4] = 1
-            src_lattice[0, :, 7] = 1
+            src_lattice[0, :, 0] = 1
+            # src_lattice[0, :, 4] = 1
+            # src_lattice[0, :, 7] = 1
         elif m == 16:
-            # src_lattice[0, :, 0] = 1
-            src_lattice[0, :, 7] = 1
-            src_lattice[0, :, 15] = 1
+            src_lattice[0, :, 0] = 1
+            # src_lattice[0, :, 7] = 1
+            # src_lattice[0, :, 15] = 1
         else:
             raise ValueError(f"Shadow test isn't implemented for m={m}")
 
@@ -364,7 +382,7 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
         k = N[1] / 2
 
     S_i = lattice_to_vector(src_lattice)
-    
+
     # Construct opaque ellipse
     X, Y = np.meshgrid(range(N[0]), range(N[1]))
     opaque_ellipse = ((X - h)/a) ** 2 + ((Y - k)/b) ** 2 <= R**2
@@ -372,7 +390,8 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
     kappa[opaque_ellipse] = 1
     plt.imshow(kappa)
 
-    boundary_conditions = [("absorb", None)]*4
+    # boundary_conditions = [("absorb", None)]*4
+    boundary_conditions = [("periodic", None)]*4
 
     lattices = simulate(
         I_i, S_i,
@@ -396,7 +415,7 @@ def analysis_shadow(source_type=None, N=None, n_it=5):
 
     if N is None:
         N = [8, 8]
-    else:
+    elif isinstance(N, str):
         N = [int(d) for d in N.split(",")]
 
     n_it = int(n_it)
@@ -408,6 +427,7 @@ def analysis_shadow(source_type=None, N=None, n_it=5):
     ax.imshow(lattice[-1].sum(axis=2).T)
     ax.set_title(f"Radiation intensity - Iteration {it}")
 
+    plt.savefig(f"outputs/plot_shadow-{source_type}_{N[0]}-{N[1]}_{n_it}.png", dpi=500)
     plt.show()
 
 # Amplitude loss test

@@ -3,13 +3,16 @@ np.set_printoptions(linewidth=1000)
 
 import matplotlib.pyplot as plt
 
+import re
+
 from qiskit.quantum_info import Statevector, partial_trace
 
 from statevector_to_str import statevector_to_str
 
 def measurements_to_lattice(
+	quantity_idx,
 	m,
-	N,
+    N,
 	counts,
 	idx_coord_map,
 	lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
@@ -17,15 +20,16 @@ def measurements_to_lattice(
 ):
 	lattice = np.zeros((*N, m))
 
+	total_counts = sum([count for outcome, count in counts.items() if outcome[:3] == "000" and outcome[switch_qubits[0]] == str(quantity_idx)])
 	for outcome, count in counts.items():
 		outcome_ancilla_bin = "".join(outcome[l] for l in ancilla_qubits)
 		outcome_switch_bin = "".join(outcome[l] for l in switch_qubits)
 
-		if outcome[:3] == "000" and outcome[switch_qubits[0]] == "0":
+		if outcome[:3] == "000" and outcome[switch_qubits[0]] == str(quantity_idx):
 			lattice_point_bin = "".join(outcome[l] for l in lattice_qubits)
 			lattice_point = idx_coord_map[lattice_point_bin]
 
-			lattice_direction_bin = "".join(outcome[l] for l in direction_qubits)[::-1]
+			lattice_direction_bin = "".join(outcome[l] for l in direction_qubits)#[::-1]
 			mu = int(lattice_direction_bin, 2)
 			
 			lattice[*lattice_point, mu] += count
@@ -35,7 +39,13 @@ def measurements_to_lattice(
 
 	return lattice
 
-def statevector_analysis(qc, n_qubits, auxiliary_qubits, ancilla_qubits, verbose=False):
+def statevector_analysis(
+    qc,
+    n_qubits,
+    auxiliary_qubits,
+    ancilla_qubits,
+    verbose=False
+):
 	print("Performing statevector analysis...")
 
 	sv = Statevector(qc)
@@ -72,4 +82,47 @@ def statevector_analysis(qc, n_qubits, auxiliary_qubits, ancilla_qubits, verbose
 	# print("Lattice data statevector:", np.array(sv_lattice))
 
 	return sv, sv_proj, sv_lattice
+
+def statevector_analysis_deep(
+    qc,
+    m,
+    N,
+    idx_coord_map,
+    lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+    verbose=False
+):
+    resultant_statevector = np.array(Statevector(qc))
+    resultant_string = statevector_to_str(resultant_statevector)
+    print("Statevector:", resultant_string)
+
+    resultant_pairs = re.findall(r"([\-0-9\.]*)(\|[01]+〉)", resultant_string)
+    resultant_amplitudes = []
+    resultant_outcomes = []
+    for resultant_amplitude, resultant_outcome in resultant_pairs:
+        resultant_amplitudes.append(float(resultant_amplitude) if len(resultant_amplitude) > 0 else 1.0)
+        resultant_outcomes.append(resultant_outcome[1:-1])
+
+    resultant_probabilities = [float(np.linalg.norm(resultant_amplitude)**2) for resultant_amplitude in resultant_amplitudes]
+    resultant_counts_list = [resultant_probability*1E4 for resultant_probability in resultant_probabilities]
+
+    resultant_counts = dict(zip(resultant_outcomes, resultant_counts_list))
+    print("Counts dictionary:", resultant_counts)
+
+    print("Intensity lattice:", measurements_to_lattice(
+        0,
+        m, N,
+        resultant_counts,
+        idx_coord_map,
+        lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+        verbose=True
+    ))
+
+    print("Source lattice:", measurements_to_lattice(
+        1,
+        m, N,
+        resultant_counts,
+        idx_coord_map,
+        lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+        verbose=True
+    ))
 

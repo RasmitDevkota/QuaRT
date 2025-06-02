@@ -49,35 +49,39 @@ def compute_scheme_velocities(n, m):
                 raise ValueError(f"Angular discretization m={m} is not supported for 3D lattices. Please choose from: m=18")
 
             cs = list(zip(cxs, cys, czs))
+        case _:
+            raise ValueError(f"Invalid dimension {n}")
 
     return idxs_dir, cs
 
 def compute_scheme_boundaries(n, m):
     match n:
         case 1:
-            if m == 2:
-                boundary_idxs_left = [0]
-                boundary_idxs_right = [1]
+            match m:
+                case 2:
+                    boundary_idxs_left = [0]
+                    boundary_idxs_right = [1]
 
-                boundary_idxs = [boundary_idxs_left, boundary_idxs_right]
-            else:
-                raise ValueError("Only m=2 is supported for 1D lattices. Did you mean to pick a higher-dimensional lattice?")
+                    boundary_idxs = [boundary_idxs_left, boundary_idxs_right]
+                case _:
+                    raise ValueError("Only m=2 is supported for 1D lattices. Did you mean to pick a higher-dimensional lattice?")
         case 2:
-            if m == 4:
-                boundary_idxs_left = [2]
-                boundary_idxs_right = [0]
-                boundary_idxs_top = [1]
-                boundary_idxs_bottom = [3]
-            elif m == 8:
-                boundary_idxs_left = [2, 5, 6]
-                boundary_idxs_right = [0, 4, 7]
-                boundary_idxs_top = [1, 4, 5]
-                boundary_idxs_bottom = [3, 6, 7]
-            elif m == 16:
-                boundary_idxs_left = [2, 5, 6, 11, 12]
-                boundary_idxs_right = [0, 4, 7, 8, 15]
-                boundary_idxs_top = [1, 4, 5, 9, 10]
-                boundary_idxs_bottom = [3, 6, 7, 13, 14]
+            match m:
+                case 4:
+                    boundary_idxs_left = [2]
+                    boundary_idxs_right = [0]
+                    boundary_idxs_top = [1]
+                    boundary_idxs_bottom = [3]
+                case 8:
+                    boundary_idxs_left = [2, 5, 6]
+                    boundary_idxs_right = [0, 4, 7]
+                    boundary_idxs_top = [1, 4, 5]
+                    boundary_idxs_bottom = [3, 6, 7]
+                case 16:
+                    boundary_idxs_left = [2, 5, 6, 11, 12]
+                    boundary_idxs_right = [0, 4, 7, 8, 15]
+                    boundary_idxs_top = [1, 4, 5, 9, 10]
+                    boundary_idxs_bottom = [3, 6, 7, 13, 14]
 
             boundary_idxs = [boundary_idxs_left, boundary_idxs_right, boundary_idxs_top, boundary_idxs_bottom]
         case 3:

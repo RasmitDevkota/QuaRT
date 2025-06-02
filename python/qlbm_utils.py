@@ -6,28 +6,34 @@ from lbm_utils import compute_grid_parameters
 
 def compute_memory_requirements(m, M_0, verbose=False):
 	n_qubits_lattice = int(np.ceil(np.log2(M_0)))
+	n_qubits_boundary = 1
 	n_qubits_direction = int(np.ceil(np.log2(m)))
 	n_qubits_switch = 1
-	n_qubits_ancilla = 1 + 2 + 2 + 1 # 1 - AS, 2 - AE, 2 - P, 1 - @TODO unknown?
-	n_qubits = n_qubits_lattice + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
+	n_qubits_ancilla = 1 + 2 + 2 + 1 + 1 # 1 - AS, 2 - AE, 2 - AR, 1 - BC, 1 - @TODO unknown?
+	n_qubits = n_qubits_lattice + n_qubits_boundary + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
 
 	if verbose:
 		print(f"Total qubits: {n_qubits}")
 		print(f"Lattice qubits: {n_qubits_lattice}")
+		print(f"Boundary qubits: {n_qubits_boundary}")
 		print(f"Direction qubits: {n_qubits_direction}")
 		print(f"Switch qubits: {n_qubits_switch}")
 		print(f"Ancilla qubits: {n_qubits_ancilla}")
 
-	return n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
+	return n_qubits, n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
 
-def allocate_registers(n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla):
+def allocate_registers(
+    n_qubits,
+    n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
+):
 	qreg_lattice = QuantumRegister(n_qubits_lattice, name="L")
+	qreg_boundary = QuantumRegister(n_qubits_boundary, name="B")
 	qreg_direction = QuantumRegister(n_qubits_direction, name="D")
 	qreg_switch = QuantumRegister(n_qubits_switch, name="S")
 	qreg_ancilla = QuantumRegister(n_qubits_ancilla, name="A")
 	creg_measure = ClassicalRegister(n_qubits, name="C")
 
-	return qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla, creg_measure
+	return qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure
 
 def compute_binary_representations(m, M, verbose=False):
 	coordinate_max = M

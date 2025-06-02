@@ -12,16 +12,18 @@ import pennylane as qml
 
 def state_preparation(
     I_i, S_i,
-    m,
+    n, m,
+    N,
     delta_t,
     coord_idx_map, m_max_bin,
-    n_qubits,
-    qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
+    boundary_idxs, boundary_conditions,
+    n_qubits, n_qubits_ancilla,
+    qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
     verbose=False
 ):
     initial_statevector = np.zeros((2**n_qubits))
 
-    anc_bin = "0000"
+    anc_bin = "0"*n_qubits_ancilla
 
     prob_amp_I = 0
     prob_amp_S = 0
@@ -35,7 +37,7 @@ def state_preparation(
     print("actually recovering intensities and sources:")
     print(I_i, S_i)
 
-    for c, (coordinate_idx, coordinate_bin) in enumerate(coord_idx_map.items()):
+    for c, (coordinate, coordinate_bin) in enumerate(coord_idx_map.items()):
         coordinate_bin = coordinate_bin[::-1]
 
         for mu in range(m):
@@ -43,6 +45,25 @@ def state_preparation(
 
             for s_bin in range(2):
                 if s_bin == 0:
+                    match n:
+                        case 1:
+                            boundary_bin = "1" if (
+                                (coordinate[0] == 0 and mu in boundary_idxs[0] and boundary_conditions[0] == "absorb") or
+                                (coordinate[0] == N[0]-1 and mu in boundary_idxs[1] and boundary_conditions[1][0] == "absorb")
+                            ) else "0"
+                        case 2:
+                            boundary_bin = "1" if (
+                                (coordinate[0] == 0 and mu in boundary_idxs[0] and boundary_conditions[0][0] == "absorb") or
+                                (coordinate[0] == N[0]-1 and mu in boundary_idxs[1] and boundary_conditions[1][0] == "absorb") or
+                                (coordinate[1] == 0 and mu in boundary_idxs[2] and boundary_conditions[2][0] == "absorb") or
+                                (coordinate[1] == N[1]-1 and mu in boundary_idxs[3] and boundary_conditions[3][0] == "absorb")
+                            ) else "0"
+                        case 3:
+                            boundary_bin = "0"
+
+                    if boundary_bin[0] == "1":
+                        print("Absorb boundary conditions @", coordinate)
+
                     prob_amp = I_i[c, mu]
                     prob_amp_I += prob_amp
                 else:
@@ -52,7 +73,7 @@ def state_preparation(
                     prob_amp *= 2.0
                     prob_amp_S += prob_amp
 
-                idx_bin = f"0b{anc_bin}{s_bin}{mu_bin}{coordinate_bin}"
+                idx_bin = f"0b{anc_bin}{s_bin}{mu_bin}{boundary_bin}{coordinate_bin}"
                 idx_dec = int(idx_bin, 2)
                 initial_statevector[idx_dec] = prob_amp
 
@@ -64,7 +85,7 @@ def state_preparation(
 
     print("prob_amps:", prob_amp_I, prob_amp_S)
 
-    qc = QuantumCircuit(qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla)
+    qc = QuantumCircuit(qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla)
     qc.initialize(initial_statevector)
 
     return qc
@@ -206,6 +227,7 @@ def angular_redistribution(
     print(R_p)
     print(R_m)
 
+    # Construct quantum circuit
     CR_0 = UnitaryGate(R_0, label="$R_0$").control(3)
     CR_p = UnitaryGate(R_p, label="$R_+$").control(3)
     CR_m = UnitaryGate(R_m, label="$R_-$").control(3)
@@ -238,6 +260,68 @@ def angular_redistribution(
 
     return qc
 
+def apply_boundary_conditions(
+    n, m,
+    N, M,
+    cs,
+    idx_coord_map, coord_idx_map, m_max_bin,
+    boundary_idxs,
+    n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+    qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
+    verbose=False
+):
+    if n == 3:
+        raise NotImplementedError("Currently, only periodic boundary conditions are supported for 3D lattices")
+
+    # Construct matrices
+    # dim_W = 2**(1)
+    # W = np.eye((dim_W))
+
+    qc = QuantumCircuit(qreg_boundary, qreg_switch, qreg_ancilla)
+
+    # for boundary_dir_list in boundary_idxs:
+    #     for coord, idx_bin in coord_idx_map.items():
+    #         for mu in boundary_dir_list:
+    #             apply_BCs = False
+    #             match n:
+    #                 case 1:
+    #                     apply_BCs = (
+    #                         (coord[0] == 0 and mu in boundary_idxs[0]) or
+    #                         (coord[0] == N[0]-1 and mu in boundary_idxs[1])
+    #                     )
+    #                 case 2:
+    #                     apply_BCs = (
+    #                         (coord[0] == 0 and mu in boundary_idxs[0]) or
+    #                         (coord[0] == N[0]-1 and mu in boundary_idxs[1]) or
+    #                         (coord[1] == 0 and mu in boundary_idxs[2]) or
+    #                         (coord[1] == N[1]-1 and mu in boundary_idxs[3])
+    #                     )
+    #
+    #             if apply_BCs:
+    #                 ctrl_lattice = idx_bin
+    #                 ctrl_direction = bin(mu)[2:].zfill(len(m_max_bin))
+    #                 ctrl_switch = "0"
+    #                 ctrl_state = ctrl_lattice + ctrl_direction + ctrl_switch
+    #
+    #                 print(n_qubits_lattice + n_qubits_direction + n_qubits_switch, ctrl_state)
+    #
+    #                 absorb_gate = XGate().control(n_qubits_lattice + n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state)
+    #
+    #                 qc.append(absorb_gate, qreg_switch[:] + qreg_direction[:] + qreg_lattice[:] + [qreg_ancilla[5]])
+
+    ctrl_boundary = "1"
+    ctrl_switch = "0"
+    ctrl_state = ctrl_boundary + ctrl_switch
+
+    absorb_gate = XGate().control(n_qubits_boundary + n_qubits_switch, ctrl_state=ctrl_state)
+
+    qc.append(absorb_gate, qreg_switch[:] + qreg_boundary[:] + [qreg_ancilla[-1]])
+
+    print("Absorb BC circuit")
+    qc.draw(output="mpl")
+
+    return qc
+
 # Original propagation function (wraps single_direction_propagation and single_direction_propagation_angular_redistribution)
 def propagation(
     n, m,
@@ -253,7 +337,7 @@ def propagation(
     # Prepare quantum circuit first since we need to construct it on the fly
     qc = QuantumCircuit(qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla)
 
-    cpu_count = 1#mp.cpu_count()
+    cpu_count = mp.cpu_count()
     batch_size = max(int(np.ceil(m/cpu_count)), 1)
     print(cpu_count, batch_size)
 
@@ -265,8 +349,6 @@ def propagation(
                 raise ValueError("Boundary conditions currently must be the same for all walls!")
         elif len(boundary_conditions) != 4:
             raise ValueError("Boundary conditions must be specified for all walls!")
-
-    with_angular_redistribution = False
 
     # Use multiprocessing pool
     with mp.Pool(cpu_count) as pool:
@@ -303,8 +385,6 @@ def propagation(
         single_direction_propagation_gates = [result[0] for result in results]
         single_direction_propagation_gate_qubits = [result[1] for result in results]
 
-    # for mu in range(m):
-    #     qc.append(single_direction_propagation_gates[mu], single_direction_propagation_gate_qubits[mu])
     for gate, qubits in zip(single_direction_propagation_gates, single_direction_propagation_gate_qubits):
         qc.append(gate, qubits)
 
@@ -472,6 +552,9 @@ def single_direction_propagation(
     # CP_mu_circuit acts on the lattice qubits, but appropriately controlled by the direction and switch qubits
     CP_mu_circuit = P_mu_circuit.control(n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state, label=f"$P_{mu}$")
     CP_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
+
+    print(f"{mu}-propagation circuit")
+    CP_mu_circuit.draw(output="mpl")
 
     print(time.time())
 

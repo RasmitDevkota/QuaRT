@@ -12,7 +12,7 @@ from qiskit.visualization import plot_histogram
 
 from statevector_to_str import statevector_to_str
 
-from qlbm_circuits import state_preparation, absorption_scattering, absorption_emission, angular_redistribution, propagation
+from qlbm_circuits import state_preparation, absorption_scattering, absorption_emission, angular_redistribution, apply_boundary_conditions, propagation
 from qlbm_utils import compute_memory_requirements, allocate_registers, compute_binary_representations, map_indices_coordinates, construct_identity_matrices
 from lbm_utils import compute_grid_parameters, compute_scheme_velocities, compute_scheme_boundaries
 from analysis import measurements_to_lattice, statevector_analysis, statevector_analysis_deep
@@ -21,7 +21,7 @@ def simulate(
     I_i, S_i,
     n, m,
     N,
-    n_it=1,
+    n_timesteps=1,
     delta_t=1,
     kappa=0.0,
     sigma=0.0,
@@ -34,6 +34,9 @@ def simulate(
     time_start = time.time()
 
     # 0. Input parsing
+    if boundary_conditions is None:
+        boundary_conditions = [("periodic", None)]*4
+
     if statevector_analysis_options is None:
         statevector_analysis_options = []
 
@@ -52,13 +55,13 @@ def simulate(
         S_i = np.zeros(shape=(M, m))
 
     # 3. Quantum system construction
-    n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla = compute_memory_requirements(m, M_0)
+    n_qubits, n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla = compute_memory_requirements(m, M_0)
 
-    qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla, creg_measure = allocate_registers(n_qubits, n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla)
+    qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure = allocate_registers(n_qubits, n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla)
 
     I_2, I_M, I_2M, I_4M, Z_2M = construct_identity_matrices(M)
 
-    # Absorption-Scattering, Absorption-Emission, Propagation, and Angular Redistribution circuits are constant for time-independent simulation setups
+    # Absorption-Scattering, Absorption-Emission, Angular Redistribution, Propagation, and Boundary Condition circuits are constant for time-independent simulation setups
     ASCircuit = absorption_scattering(
         kappa, sigma,
         delta_t,
@@ -66,10 +69,10 @@ def simulate(
         n_qubits_direction,
         qreg_direction, qreg_switch, qreg_ancilla
     )
-    print("Absorption-Scattering circuit breakdown:", ASCircuit.count_ops())
 
     # If there are more than one non-zero entries, we use angular redistribution
-    with_angular_redistribution = True or angular_redistribution_coefficients is not None
+    ARCircuit = None
+    with_angular_redistribution = angular_redistribution_coefficients is not None
     if with_angular_redistribution:
         print("Applying angular redistribution")
 
@@ -82,13 +85,11 @@ def simulate(
             n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
             qreg_direction, qreg_switch, qreg_ancilla
         )
-        print("Angular Redistribution circuit breakdown:", ASCircuit.count_ops())
 
     AECircuit = absorption_emission(
         I_2M, Z_2M,
         qreg_switch, qreg_ancilla
     )
-    print("Absorption-Emission circuit breakdown:", AECircuit.count_ops())
 
     PCircuit = propagation(
         n, m,
@@ -99,24 +100,41 @@ def simulate(
         boundary_idxs, boundary_conditions,
         n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
         qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
-        verbose=False#True
+        verbose=False
     )
-    print("Propagation circuit breakdown:", PCircuit.count_ops())
+
+    BCCircuit = None
+    if boundary_conditions is not None:
+        if any([boundary_condition[0] != "periodic" for boundary_condition in boundary_conditions]):
+            print(f"Applying special boundary conditions: {boundary_conditions}")
+
+            BCCircuit = apply_boundary_conditions(
+                n, m,
+                N, M,
+                cs,
+                idx_coord_map, coord_idx_map, m_max_bin,
+                boundary_idxs,
+                n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+                qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
+                verbose=False
+            )
 
     qc_0 = QuantumCircuit(
-        qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
+        qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
         creg_measure
     )
 
     # Log qubit usage
     lattice_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_lattice[:]]
-    auxiliary_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]]
+    auxiliary_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]]
     direction_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_direction[:]]
+    boundary_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_boundary[:]]
     switch_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_switch[:]]
     ancilla_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_ancilla[:]]
     print(
         f"Lattice qubits: {lattice_qubits}",
         f"Auxiliary qubits: {auxiliary_qubits}",
+        f"Boundary qubits: {boundary_qubits}",
         f"Direction qubits: {direction_qubits}",
         f"Switch qubits: {switch_qubits}",
         f"Ancilla qubits: {ancilla_qubits}",
@@ -148,8 +166,8 @@ def simulate(
         print("Using CPU")
 
     # Simulate
-    for it in range(n_it+1):
-        print(f"========== Iteration {it} ==========")
+    for timestep in range(n_timesteps+1):
+        print(f"========== Timestep {timestep} / Time {timestep*delta_t} ==========")
 
         qc = qc_0
         # qc = qc_prev
@@ -158,39 +176,45 @@ def simulate(
             initial_statevector = Statevector(qc)
             print("Initial statevector:", statevector_to_str(np.array(initial_statevector)))
 
-        print("--- new iteration", time.time())
+        print("--- new timestep", time.time())
 
         print("--- constructing circuit", time.time())
 
         print("trying to recover intensities and sources:\n", I_prev, "\n", S_prev)
         SPCircuit = state_preparation(
-            I_prev, S_prev if it >= 0 else np.zeros((M,m)),
-            m,
+            I_prev, S_prev if timestep >= 0 else np.zeros((M,m)),
+            n, m,
+            N,
             delta_t,
             coord_idx_map, m_max_bin,
-            n_qubits,
-            qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla
+            boundary_idxs, boundary_conditions,
+            n_qubits, n_qubits_ancilla,
+            qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla
         )
         qc = qc.compose(
             SPCircuit,
-            qreg_lattice[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]
+            qreg_lattice[:] + qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]
         )
         qc.barrier()
 
-        # At the zeroth iteration, we only do state preparation
-        if it >= 1:
+        # At the zeroth timestep, we only do state preparation
+        if timestep >= 1:
             qc = qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
 
             qc = qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
 
-            if with_angular_redistribution:
+            if ARCircuit is not None:
                 qc = qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
                 qc.barrier()
 
             qc = qc.compose(PCircuit, qreg_lattice[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
+
+            if BCCircuit is not None:
+                qc = qc.compose(BCCircuit, qreg_boundary[:] + qreg_switch[:] + qreg_ancilla[:])
+                qc.barrier()
 
         if "shallow" in statevector_analysis_options:
             print("--- shallow statevector analysis", time.time())
@@ -219,13 +243,12 @@ def simulate(
         print("--- transpiling and running", time.time())
 
         qc_transpiled = transpile(qc_meas, backend, optimization_level=3)
-        # print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
-        result = backend.run(qc_transpiled, shots=int(1E4)).result()
+        result = backend.run(qc_transpiled, shots=int(1E5)).result()
         counts = result.get_counts(qc_transpiled)
 
         print("--- wrapping up", time.time())
 
-        counts_post = dict([(measurement, count) for measurement, count in counts.items() if measurement[:3] == "000"])
+        counts_post = dict([(measurement, count) for measurement, count in counts.items() if measurement.startswith("0"*n_qubits_ancilla)])
         print("Full counts:", counts)
         print("Post-selected counts:", counts_post)
 
@@ -244,7 +267,7 @@ def simulate(
         else:
             print("intensities are empty")
 
-        if save_lattices or it == n_it:
+        if save_lattices or timestep == n_timesteps:
             lattices.append(lattice_I)
 
         # @TODO - we have to be careful with normalization at this point because future emission
@@ -253,13 +276,14 @@ def simulate(
         # I_prev = lattice_I.reshape((M, m), copy=True)
         I_prev = np.copy(lattice_I).reshape((M, m))
 
+        # @TEST
         # lattice_S = measurements_to_lattice(
         #     1,
         #     m,
         #     N,
         #     counts,
         #     idx_coord_map,
-        #     lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+        #     lattice_qubits, direction_qubits, direction_qubits, switch_qubits, ancilla_qubits,
         #     verbose=True
         # )
         # if np.linalg.norm(lattice_S) > 0:
@@ -268,7 +292,7 @@ def simulate(
         # else:
         #     print("sources are empty")
 
-        if save_circuit and it == n_it:
+        if save_circuit and timestep == n_timesteps:
             qc.draw(output="mpl", filename="outputs/qc.png")
 
     time_stop = time.time()

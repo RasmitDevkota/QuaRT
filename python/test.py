@@ -6,8 +6,10 @@ import matplotlib.pyplot as plt
 from qlbm_rt import simulate
 from qlbm_utils import lattice_to_vector
 
+UNUSED = None
+
 # Point source 1D test
-def test_point_source_1D(N=None, n_it=10):
+def test_point_source_1D(N=None, n_timesteps=10):
     n = 1
     m = 2
 
@@ -16,7 +18,7 @@ def test_point_source_1D(N=None, n_it=10):
     else:
         N = [int(N)]
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
     M_0 = np.prod(N)
     M = 2**int(np.ceil(np.log2(M_0)))
@@ -33,41 +35,41 @@ def test_point_source_1D(N=None, n_it=10):
         I_i, S_i,
         n, m,
         N,
-        n_it=n_it,
+        n_timesteps=n_timesteps,
         save_lattices=True
     )
 
-    lattices = np.save(f"outputs/lattice_point_src_1D_{n_it}.npy", lattices)
+    lattices = np.save(f"outputs/lattice_point_src_1D_{n_timesteps}.npy", lattices)
 
-    analysis_point_source_1D(True, n_it)
+    analysis_point_source_1D(n_timesteps=n_timesteps, sep_dirs=True)
 
-def analysis_point_source_1D(sep_dirs=True, n_it=10):
+def analysis_point_source_1D(N=UNUSED, n_timesteps=10, sep_dirs=True):
     if isinstance(sep_dirs, str):
         if sep_dirs.lower() in ["true", "yes", "ye", "y", "1"]:
             sep_dirs = True
         else:
             sep_dirs = False
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
-    lattices = np.load(f"outputs/lattice_point_src_1D_{n_it}.npy")
+    lattices = np.load(f"outputs/lattice_point_src_1D_{n_timesteps}.npy")
 
-    fig, ax = plt.subplots(nrows=n_it+1)
+    fig, ax = plt.subplots(nrows=n_timesteps+1)
 
-    for it, lattice in enumerate(lattices):
+    for timestep, lattice in enumerate(lattices):
         if sep_dirs:
-            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red", marker=">")
-            ax[it].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue", marker="<")
+            ax[timestep].scatter(np.arange(lattice.shape[0]), lattice[:, 0], c="red", marker=">")
+            ax[timestep].scatter(np.arange(lattice.shape[0]), lattice[:, 1], c="blue", marker="<")
         else:
-            ax[it].scatter(np.arange(lattice.shape[0]), np.sum(lattice, axis=1))
+            ax[timestep].scatter(np.arange(lattice.shape[0]), np.sum(lattice, axis=1))
 
-        ax[it].set_title(f"Iteration {it}")
+        ax[timestep].set_title(f"Timestep {timestep}")
 
-    plt.savefig(f"outputs/lattice_point_src_1D_{n_it}.png", dpi=500)
+    plt.savefig(f"outputs/lattice_point_src_1D_{n_timesteps}.png", dpi=500)
     plt.show()
 
 # Unidirectional radiation test
-def test_unidirectional_source(n=2, m=8, N=None, n_it=3):
+def test_unidirectional_source(n=2, m=8, N=None, n_timesteps=3):
     n = int(n)
     m = int(m)
 
@@ -76,12 +78,12 @@ def test_unidirectional_source(n=2, m=8, N=None, n_it=3):
     else:
         N = [int(d) for d in N.split(",")]
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
     M = np.prod(N)
 
     # @TODO - apply multiprocessing
-    lattices = [] # shape (mu, n_it+1, *N, m)
+    lattices = [] # shape (mu, n_timesteps+1, *N, m)
     for mu in range(m):
         I_i = np.zeros(shape=(M, m))
 
@@ -93,44 +95,44 @@ def test_unidirectional_source(n=2, m=8, N=None, n_it=3):
             I_i, S_i,
             n, m,
             N,
-            n_it=n_it,
+            n_timesteps=n_timesteps,
             save_lattices=True
         )
 
         lattices.append(lattices_mu)
 
-    np.save(f"outputs/lattice_uni_src_{n_it}_{m}.npy", lattices)
+    np.save(f"outputs/lattice_uni_src_{n_timesteps}_{m}.npy", lattices)
 
-    analysis_unidirectional_source(m, n_it)
+    analysis_unidirectional_source(m=m, n_timesteps=n_timesteps)
 
-def analysis_unidirectional_source(m=8, n_it=3):
+def analysis_unidirectional_source(n=UNUSED, m=8, N=UNUSED, n_timesteps=3):
     m = int(m)
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
-    fig, ax = plt.subplots(figsize=(6,18), nrows=m, ncols=n_it+1)
+    fig, ax = plt.subplots(figsize=(6,18), nrows=m, ncols=n_timesteps+1)
 
-    lattices = np.load(f"outputs/lattice_uni_src_{n_it}_{m}.npy", allow_pickle=True)
+    lattices = np.load(f"outputs/lattice_uni_src_{n_timesteps}_{m}.npy", allow_pickle=True)
     N = lattices.shape[2:-1]
     for mu in range(m):
         print("/"*20 + " " + str(mu) + " " + "/"*20)
         lattices_mu = lattices[mu]
-        for it, lattice in enumerate(lattices_mu):
+        for timestep, lattice in enumerate(lattices_mu):
             spwn = lattice[:,:,mu]
             sumspwn = np.sum(spwn)
             sums = np.sum(lattice)
             lttc = np.sum(np.sum(lattice, axis=0), axis=0)
-            print(it, sumspwn, sums, "-", lttc)
+            print(timestep, sumspwn, sums, "-", lttc)
 
             lattice[*[Ni//2 for Ni in N] ,:] = 0.25 * np.sum(lattice)
-            ax[mu][it].imshow(lattice.sum(axis=2).T)
+            ax[mu][timestep].imshow(lattice.sum(axis=2).T)
 
-            ax[mu][it].set_title(f"Direction {mu} - Iteration {it}")
+            ax[mu][timestep].set_title(f"Direction {mu} - Timestep {timestep}")
 
-    plt.savefig(f"outputs/plot_uni_src_{n_it}_{m}.png", dpi=500)
+    plt.savefig(f"outputs/plot_uni_src_{n_timesteps}_{m}.png", dpi=500)
     plt.show()
 
 # Angular redistribution spread test
-def test_redistribution_spread(n=2, m=8, mu_0=0, alpha=0.33, N=None, n_it=3):
+def test_redistribution_spread(n=2, m=8, mu_0=0, alpha=0.33, N=None, n_timesteps=3):
     n = int(n)
     m = int(m)
 
@@ -142,7 +144,7 @@ def test_redistribution_spread(n=2, m=8, mu_0=0, alpha=0.33, N=None, n_it=3):
     else:
         N = [int(d) for d in N.split(",")]
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
     M = np.prod(N)
     angular_redistribution_coefficients = np.zeros((m,m))
@@ -165,31 +167,31 @@ def test_redistribution_spread(n=2, m=8, mu_0=0, alpha=0.33, N=None, n_it=3):
         I_i, S_i,
         n, m,
         N,
-        n_it=n_it,
+        n_timesteps=n_timesteps,
         angular_redistribution_coefficients=angular_redistribution_coefficients,
         save_lattices=True
     )
 
-    np.save(f"outputs/lattice_redist_spread_{n_it}_{m}_{mu_0}.npy", lattices)
+    np.save(f"outputs/lattice_redist_spread_{n_timesteps}_{m}_{mu_0}.npy", lattices)
 
-    analysis_redistribution_spread(m, mu_0, n_it)
+    analysis_redistribution_spread(m=m, mu_0=mu_0, n_timesteps=n_timesteps)
 
-def analysis_redistribution_spread(m=8, mu_0=0, n_it=3):
-    n_it = int(n_it)
+def analysis_redistribution_spread(n=UNUSED, m=8, mu_0=0, alpha=UNUSED, N=UNUSED, n_timesteps=3):
+    n_timesteps = int(n_timesteps)
 
-    lattices = np.load(f"outputs/lattice_redist_spread_{n_it}_{m}_{mu_0}.npy")
+    lattices = np.load(f"outputs/lattice_redist_spread_{n_timesteps}_{m}_{mu_0}.npy")
 
-    fig, ax = plt.subplots(ncols=n_it+1)
+    fig, ax = plt.subplots(ncols=n_timesteps+1)
 
-    for it, lattice in enumerate(lattices):
-        ax[it].imshow(lattice.sum(axis=2).T[:, ::-1])
+    for timestep, lattice in enumerate(lattices):
+        ax[timestep].imshow(lattice.sum(axis=2).T[:, ::-1])
 
-        ax[it].set_title(f"Iteration {it}")
+        ax[timestep].set_title(f"Timestep {timestep}")
 
     plt.show()
 
 # Isotropic source test
-def test_isotropic_source(n=2, m=8, N=None, n_it=3):
+def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3):
     n = int(n)
     m = int(m)
 
@@ -198,7 +200,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
     else:
         N = [int(d) for d in N.split(",")]
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
     M = np.prod(N)
 
@@ -216,16 +218,16 @@ def test_isotropic_source(n=2, m=8, N=None, n_it=3):
         I_i, S_i,
         n, m,
         N,
-        n_it=n_it,
+        n_timesteps=n_timesteps,
         boundary_conditions=boundary_conditions,
         save_lattices=True
     )
 
-    np.save(f"outputs/lattice_iso_src_{n_it}_{N[0]}-{N[1]}_{m}.npy", lattices)
+    np.save(f"outputs/lattice_iso_src_{n_timesteps}_{N[0]}-{N[1]}_{m}.npy", lattices)
 
-    analysis_isotropic_source(N, m, n_it)
+    analysis_isotropic_source(m=m, N=N, n_timesteps=n_timesteps)
 
-def analysis_isotropic_source(N=None, m=8, n_it=3):
+def analysis_isotropic_source(n=UNUSED, m=8, N=None, n_timesteps=3):
     if N is None:
         N = [8, 8]
     elif isinstance(N, str):
@@ -233,24 +235,24 @@ def analysis_isotropic_source(N=None, m=8, n_it=3):
 
     m = int(m)
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
-    lattices = np.load(f"outputs/lattice_iso_src_{n_it}_{N[0]}-{N[1]}_{m}.npy")
+    lattices = np.load(f"outputs/lattice_iso_src_{n_timesteps}_{N[0]}-{N[1]}_{m}.npy")
 
-    fig, ax = plt.subplots(ncols=n_it+1)
+    fig, ax = plt.subplots(ncols=n_timesteps+1)
 
-    for it, lattice in enumerate(lattices):
-        ax[it].imshow(lattice.sum(axis=2).T)
+    for timestep, lattice in enumerate(lattices):
+        ax[timestep].imshow(lattice.sum(axis=2).T)
 
-        ax[it].set_title(f"Iteration {it}")
+        ax[timestep].set_title(f"Timestep {timestep}")
 
-    plt.savefig(f"outputs/plot_iso_src_{n_it}_{N[0]}-{N[1]}_{m}.png", dpi=500)
+    plt.savefig(f"outputs/plot_iso_src_{n_timesteps}_{N[0]}-{N[1]}_{m}.png", dpi=500)
     plt.show()
 
     fit_inv_sq_bg = lambda x, k, y_0 : y_0 + k * np.power(x, -2)
 
 # Crossing radiation beams test
-def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
+def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_timesteps=5):
     n = int(n)
     if n != 2:
         raise ValueError(f"Crossing radiation beams test isn't implemented for n={n}")
@@ -268,7 +270,7 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
     else:
         hw = int(hw)
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
     M = np.prod(N)
 
@@ -295,15 +297,15 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_it=5):
         I_i, S_i,
         n, m,
         N,
-        n_it=n_it,
+        n_timesteps=n_timesteps,
         save_lattices=True
     )
 
-    np.save(f"outputs/lattice_crb_{n_it}_{N[0]}-{N[1]}_{hw}.npy", lattices)
+    np.save(f"outputs/lattice_crb_{n_timesteps}_{N[0]}-{N[1]}_{hw}.npy", lattices)
 
-    analysis_crossing_radiation_beams(N, hw, n_it)
+    analysis_crossing_radiation_beams(N=N, hw=hw, n_timesteps=n_timesteps)
 
-def analysis_crossing_radiation_beams(N=None, hw=None, n_it=5):
+def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, n_timesteps=5):
     if N is None:
         N = [8, 8]
     elif isinstance(N, str):
@@ -314,25 +316,25 @@ def analysis_crossing_radiation_beams(N=None, hw=None, n_it=5):
     elif isinstance(hw, str):
         hw = int(hw)
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
-    lattices = np.load(f"outputs/lattice_crb_{n_it}_{n[0]}-{n[1]}_{hw}.npy")
+    lattices = np.load(f"outputs/lattice_crb_{n_timesteps}_{n[0]}-{n[1]}_{hw}.npy")
 
-    ncols = min(n_it+1, 6)
+    ncols = min(n_timesteps+1, 6)
     fig, ax = plt.subplots(ncols=ncols)
 
-    for it in range(n_it+1):
-        if n_it <= 5 or (it % ncols) == 0:
-            lattice = lattices[it]
+    for timestep in range(n_timesteps+1):
+        if n_timesteps <= 5 or (timestep % ncols) == 0:
+            lattice = lattices[timestep]
 
-            ax[it].imshow(lattice.sum(axis=2).T)
+            ax[timestep].imshow(lattice.sum(axis=2).T)
 
-            ax[it].set_title(f"Iteration {it}")
+            ax[timestep].set_title(f"Timestep {timestep}")
 
     plt.show()
 
 # Shadow test
-def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
+def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5):
     n = int(n)
     if n != 2:
         raise ValueError(f"Shadow test isn't implemented for n={n}")
@@ -344,7 +346,7 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
     else:
         N = [int(d) for d in N.split(",")]
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
     M = np.prod(N)
 
@@ -397,17 +399,17 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_it=5):
         I_i, S_i,
         n, m,
         N,
-        n_it=n_it,
+        n_timesteps=n_timesteps,
         kappa=kappa,
         boundary_conditions=boundary_conditions,
         save_lattices=True
     )
 
-    np.save(f"outputs/lattice_shadow-{source_type}_{n_it}_{N[0]}-{N[1]}.npy", lattices)
+    np.save(f"outputs/lattice_shadow-{source_type}_{n_timesteps}_{N[0]}-{N[1]}.npy", lattices)
 
-    analysis_shadow(source_type, N, n_it)
+    analysis_shadow(source_type=source_type, N=N, n_timesteps=n_timesteps)
 
-def analysis_shadow(source_type=None, N=None, n_it=5):
+def analysis_shadow(n=UNUSED, m=UNUSED, source_type=None, N=None, n_timesteps=5):
     if source_type is not None and source_type.lower() == "point":
         source_type = "point"
     else:
@@ -418,20 +420,20 @@ def analysis_shadow(source_type=None, N=None, n_it=5):
     elif isinstance(N, str):
         N = [int(d) for d in N.split(",")]
 
-    n_it = int(n_it)
+    n_timesteps = int(n_timesteps)
 
-    lattices = np.load(f"outputs/lattice_shadow-{source_type}_{n_it}_{N[0]}-{N[1]}.npy")
+    lattices = np.load(f"outputs/lattice_shadow-{source_type}_{n_timesteps}_{N[0]}-{N[1]}.npy")
 
     fig, ax = plt.subplots()
 
     ax.imshow(lattice[-1].sum(axis=2).T)
-    ax.set_title(f"Radiation intensity - Iteration {it}")
+    ax.set_title(f"Radiation intensity - Timestep {timestep}")
 
-    plt.savefig(f"outputs/plot_shadow-{source_type}_{N[0]}-{N[1]}_{n_it}.png", dpi=500)
+    plt.savefig(f"outputs/plot_shadow-{source_type}_{N[0]}-{N[1]}_{n_timesteps}.png", dpi=500)
     plt.show()
 
 # Amplitude loss test
-def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):
+def test_amplitude_loss(n=1, m=2, N=None, n_timesteps=1000):
     n = int(n)
     m = int(m)
 
@@ -439,6 +441,8 @@ def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):
         N = [4]
     else:
         N = [int(d) for d in N.split(",")]
+
+    n_timesteps = int(n_timesteps)
 
     M = np.prod(N)
 
@@ -452,30 +456,30 @@ def test_amplitude_loss(n=1, m=2, N=None, n_it=1000):
         I_i, S_i,
         n, m,
         N,
-        n_it=n_it,
+        n_timesteps=n_timesteps,
         save_lattices=True
     )
 
-    iterations = np.arange(n_it+1)
+    timesteps = np.arange(n_timesteps+1)
     norms = [np.linalg.norm(lattice) for lattice in lattices]
-    np.savetxt(f"outputs/norms_amp_loss_{n_it}.txt", norms)
+    np.savetxt(f"outputs/norms_amp_loss_{n_timesteps}.txt", norms)
 
-    analysis_amplitude_loss(n_it)
+    analysis_amplitude_loss(n_timesteps=n_timesteps)
 
-def analysis_amplitude_loss(n_it=5):
-    n_it = int(n_it)
+def analysis_amplitude_loss(n=UNUSED, m=UNUSED, N=UNUSED, n_timesteps=5):
+    n_timesteps = int(n_timesteps)
 
-    iterations = np.arange(n_it+1)
-    norms = np.loadtxt(f"outputs/norms_amp_loss_{n_it}.txt")
+    timesteps = np.arange(n_timesteps+1)
+    norms = np.loadtxt(f"outputs/norms_amp_loss_{n_timesteps}.txt")
 
     print(f"Mean: {np.mean(norms[1:])}\nStandard Deviation: {np.std(norms[1:])}\nRange: {np.ptp(norms[1:])}")
 
-    a, b = np.polyfit(iterations[1:], norms[1:], 1)
+    a, b = np.polyfit(timesteps[1:], norms[1:], 1)
     print(f"Line of best fit: A(t) ≈ {a:.6f}t + {b:.6f}")
 
     fig, ax = plt.subplots()
-    plt.scatter(iterations, norms)
-    plt.plot(iterations, a * iterations + b)
+    plt.scatter(timesteps, norms)
+    plt.plot(timesteps, a * timesteps + b)
     plt.show()
 
 if __name__ == "__main__":

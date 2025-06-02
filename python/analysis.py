@@ -20,12 +20,11 @@ def measurements_to_lattice(
 ):
 	lattice = np.zeros((*N, m))
 
-	total_counts = sum([count for outcome, count in counts.items() if outcome[:3] == "000" and outcome[switch_qubits[0]] == str(quantity_idx)])
 	for outcome, count in counts.items():
 		outcome_ancilla_bin = "".join(outcome[l] for l in ancilla_qubits)
 		outcome_switch_bin = "".join(outcome[l] for l in switch_qubits)
 
-		if outcome[:3] == "000" and outcome[switch_qubits[0]] == str(quantity_idx):
+		if "1" not in outcome_ancilla_bin and outcome[switch_qubits[0]] == str(quantity_idx):
 			lattice_point_bin = "".join(outcome[l] for l in lattice_qubits)
 			lattice_point = idx_coord_map[lattice_point_bin]
 

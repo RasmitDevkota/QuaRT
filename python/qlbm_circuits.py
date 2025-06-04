@@ -60,6 +60,14 @@ def state_preparation(
                             ) else "0"
                         case 3:
                             boundary_bin = "0"
+                            boundary_bin = "1" if (
+                                (coordinate[0] == 0 and mu in boundary_idxs[0] and boundary_conditions[0][0] == "absorb") or
+                                (coordinate[0] == N[0]-1 and mu in boundary_idxs[1] and boundary_conditions[1][0] == "absorb") or
+                                (coordinate[1] == 0 and mu in boundary_idxs[2] and boundary_conditions[2][0] == "absorb") or
+                                (coordinate[1] == N[1]-1 and mu in boundary_idxs[3] and boundary_conditions[3][0] == "absorb")
+                                (coordinate[2] == 0 and mu in boundary_idxs[4] and boundary_conditions[4][0] == "absorb") or
+                                (coordinate[2] == N[2]-1 and mu in boundary_idxs[5] and boundary_conditions[5][0] == "absorb")
+                            ) else "0"
 
                     if boundary_bin[0] == "1":
                         print("Absorb boundary conditions @", coordinate)
@@ -98,7 +106,7 @@ def absorption_scattering(
     qreg_direction, qreg_switch, qreg_ancilla
 ):
     # Hardcoded parameters for testing
-    kappa = 1.0
+    kappa = 0.0
     sigma = 0.0
     delta_t = 1
 
@@ -270,55 +278,14 @@ def apply_boundary_conditions(
     qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
     verbose=False
 ):
-    if n == 3:
-        raise NotImplementedError("Currently, only periodic boundary conditions are supported for 3D lattices")
-
-    # Construct matrices
-    # dim_W = 2**(1)
-    # W = np.eye((dim_W))
-
-    qc = QuantumCircuit(qreg_boundary, qreg_switch, qreg_ancilla)
-
-    # for boundary_dir_list in boundary_idxs:
-    #     for coord, idx_bin in coord_idx_map.items():
-    #         for mu in boundary_dir_list:
-    #             apply_BCs = False
-    #             match n:
-    #                 case 1:
-    #                     apply_BCs = (
-    #                         (coord[0] == 0 and mu in boundary_idxs[0]) or
-    #                         (coord[0] == N[0]-1 and mu in boundary_idxs[1])
-    #                     )
-    #                 case 2:
-    #                     apply_BCs = (
-    #                         (coord[0] == 0 and mu in boundary_idxs[0]) or
-    #                         (coord[0] == N[0]-1 and mu in boundary_idxs[1]) or
-    #                         (coord[1] == 0 and mu in boundary_idxs[2]) or
-    #                         (coord[1] == N[1]-1 and mu in boundary_idxs[3])
-    #                     )
-    #
-    #             if apply_BCs:
-    #                 ctrl_lattice = idx_bin
-    #                 ctrl_direction = bin(mu)[2:].zfill(len(m_max_bin))
-    #                 ctrl_switch = "0"
-    #                 ctrl_state = ctrl_lattice + ctrl_direction + ctrl_switch
-    #
-    #                 print(n_qubits_lattice + n_qubits_direction + n_qubits_switch, ctrl_state)
-    #
-    #                 absorb_gate = XGate().control(n_qubits_lattice + n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state)
-    #
-    #                 qc.append(absorb_gate, qreg_switch[:] + qreg_direction[:] + qreg_lattice[:] + [qreg_ancilla[5]])
-
     ctrl_boundary = "1"
     ctrl_switch = "0"
     ctrl_state = ctrl_boundary + ctrl_switch
 
+    qc = QuantumCircuit(qreg_boundary, qreg_switch, qreg_ancilla)
+
     absorb_gate = XGate().control(n_qubits_boundary + n_qubits_switch, ctrl_state=ctrl_state)
-
-    qc.append(absorb_gate, qreg_switch[:] + qreg_boundary[:] + [qreg_ancilla[-1]])
-
-    print("Absorb BC circuit")
-    qc.draw(output="mpl")
+    qc.append(absorb_gate, qreg_switch[:] + qreg_boundary[:] + [qreg_ancilla[5]])
 
     return qc
 
@@ -552,9 +519,6 @@ def single_direction_propagation(
     # CP_mu_circuit acts on the lattice qubits, but appropriately controlled by the direction and switch qubits
     CP_mu_circuit = P_mu_circuit.control(n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state, label=f"$P_{mu}$")
     CP_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
-
-    print(f"{mu}-propagation circuit")
-    CP_mu_circuit.draw(output="mpl")
 
     print(time.time())
 

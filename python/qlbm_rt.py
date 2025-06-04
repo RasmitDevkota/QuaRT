@@ -70,9 +70,9 @@ def simulate(
         qreg_direction, qreg_switch, qreg_ancilla
     )
 
+    # @TEST
     # If there are more than one non-zero entries, we use angular redistribution
-    ARCircuit = None
-    with_angular_redistribution = angular_redistribution_coefficients is not None
+    with_angular_redistribution = True or angular_redistribution_coefficients is not None
     if with_angular_redistribution:
         print("Applying angular redistribution")
 
@@ -100,10 +100,12 @@ def simulate(
         boundary_idxs, boundary_conditions,
         n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
         qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
-        verbose=False
+        verbose=False#True
     )
 
+    # @TEST
     BCCircuit = None
+    boundary_conditions = [("absorb", None)]*4
     if boundary_conditions is not None:
         if any([boundary_condition[0] != "periodic" for boundary_condition in boundary_conditions]):
             print(f"Applying special boundary conditions: {boundary_conditions}")
@@ -197,7 +199,7 @@ def simulate(
         )
         qc.barrier()
 
-        # At the zeroth timestep, we only do state preparation
+        # At the zeroth timestep, we only perform state preparation
         if timestep >= 1:
             qc = qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
@@ -205,7 +207,8 @@ def simulate(
             qc = qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
 
-            if ARCircuit is not None:
+            # @TEST
+            if with_angular_redistribution and timestep >= 1:
                 qc = qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
                 qc.barrier()
 
@@ -243,7 +246,8 @@ def simulate(
         print("--- transpiling and running", time.time())
 
         qc_transpiled = transpile(qc_meas, backend, optimization_level=3)
-        result = backend.run(qc_transpiled, shots=int(1E5)).result()
+        # print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
+        result = backend.run(qc_transpiled, shots=int(1E3)).result()
         counts = result.get_counts(qc_transpiled)
 
         print("--- wrapping up", time.time())
@@ -292,7 +296,7 @@ def simulate(
         # else:
         #     print("sources are empty")
 
-        if save_circuit and timestep == n_timesteps:
+        if save_circuit or timestep == n_timesteps:
             qc.draw(output="mpl", filename="outputs/qc.png")
 
     time_stop = time.time()

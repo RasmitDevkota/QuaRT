@@ -9,7 +9,7 @@ def compute_memory_requirements(m, M_0, verbose=False):
 	n_qubits_boundary = 1
 	n_qubits_direction = int(np.ceil(np.log2(m)))
 	n_qubits_switch = 1
-	n_qubits_ancilla = 1 + 2 + 2 + 1 + 1 # 1 - AS, 2 - AE, 2 - AR, 1 - BC, 1 - @TODO unknown?
+	n_qubits_ancilla = 1 + 2 + 2 + 1 # 1 - AS, 2 - AE, 2 - AR, 1 - BC
 	n_qubits = n_qubits_lattice + n_qubits_boundary + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
 
 	if verbose:

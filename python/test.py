@@ -286,8 +286,10 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_timesteps=5):
             src_lattice[1*N[0]//3+x, N[1]-2, 5] = beam_profile_linear(hw, x)
             src_lattice[2*N[0]//3+x, N[1]-2, 4] = beam_profile_linear(hw, x)
         elif m == 16:
-            src_lattice[1*N[0]//4+x, N[1]-1, 6] = hw-np.abs(x)
-            src_lattice[3*N[0]//4+x, N[1]-1, 7] = hw-np.abs(x)
+            src_lattice[1*N[0]//4+x, N[1]-1, 6] = beam_profile_linear(hw, x)
+            src_lattice[3*N[0]//4+x, N[1]-1, 7] = beam_profile_linear(hw, x)
+        else:
+            raise ValueError(f"Crossing radiation beams test isn't implemented for m={m}")
 
     plt.imshow(np.sum(src_lattice, axis=2).T)
 

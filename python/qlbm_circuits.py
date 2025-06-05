@@ -319,16 +319,6 @@ def propagation(
 
     # Use multiprocessing pool
     with mp.Pool(cpu_count) as pool:
-        # results = [_propagation(
-        #     n, m,
-        #     N, M,
-        #     cs,
-        #     idx_coord_map, coord_idx_map, m_max_bin,
-        #     boundary_idxs, boundary_conditions,
-        #     n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-        #     qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
-        #     verbose
-        # )]
         results = pool.starmap(
             single_direction_propagation,
             [

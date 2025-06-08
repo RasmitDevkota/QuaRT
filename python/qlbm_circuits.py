@@ -34,8 +34,7 @@ def state_preparation(
     if norm_I > 0 and norm_S > 0:
         S_i = S_i * norm_I/norm_S
 
-    print("actually recovering intensities and sources:")
-    print(I_i, S_i)
+    print("actually recovering intensities and sources:\n", I_i, "\n", S_i)
 
     for c, (coordinate, coordinate_bin) in enumerate(coord_idx_map.items()):
         coordinate_bin = coordinate_bin[::-1]
@@ -69,16 +68,13 @@ def state_preparation(
                                 (coordinate[2] == N[2]-1 and mu in boundary_idxs[5] and boundary_conditions[5][0] == "absorb")
                             ) else "0"
 
-                    if boundary_bin[0] == "1":
-                        print("Absorb boundary conditions @", coordinate)
-
                     prob_amp = I_i[c, mu]
                     prob_amp_I += prob_amp
                 else:
-                    prob_amp = 0.5 * delta_t * S_i[c, mu]
+                    prob_amp = 1/m * delta_t * S_i[c, mu]
                     # @TODO - why does this kind of fix it? I know it effectively has to do with normalization,
                     #         but I think it should be performed somewhere else
-                    prob_amp *= 2.0
+                    # prob_amp *= m
                     prob_amp_S += prob_amp
 
                 idx_bin = f"0b{anc_bin}{s_bin}{mu_bin}{boundary_bin}{coordinate_bin}"
@@ -86,17 +82,15 @@ def state_preparation(
                 initial_statevector[idx_dec] = prob_amp
 
     norm = np.linalg.norm(initial_statevector)
-    if verbose:
-        print(norm)
+    print("Initial statevector norm:", norm)
+
     if norm > 0:
         initial_statevector /= norm
-
-    print("prob_amps:", prob_amp_I, prob_amp_S)
 
     qc = QuantumCircuit(qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla)
     qc.initialize(initial_statevector)
 
-    return qc
+    return qc, norm
 
 def absorption_scattering(
     kappa, sigma,

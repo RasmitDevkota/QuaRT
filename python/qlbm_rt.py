@@ -62,13 +62,15 @@ def simulate(
     I_2, I_M, I_2M, I_4M, Z_2M = construct_identity_matrices(M)
 
     # Absorption-Scattering, Absorption-Emission, Angular Redistribution, Propagation, and Boundary Condition circuits are constant for time-independent simulation setups
-    ASCircuit = absorption_scattering(
-        kappa, sigma,
-        delta_t,
-        I_2,
-        n_qubits_direction,
-        qreg_direction, qreg_switch, qreg_ancilla
-    )
+    ASCircuit = None
+    if sigma > 0.0:
+        ASCircuit = absorption_scattering(
+            kappa, sigma,
+            delta_t,
+            I_2,
+            n_qubits_direction,
+            qreg_direction, qreg_switch, qreg_ancilla
+        )
 
     # @TEST
     # If there are more than one non-zero entries, we use angular redistribution
@@ -144,10 +146,11 @@ def simulate(
     )
 
     # 4. Simulation
-    qc_prev = qc_0
     I_prev, S_prev = np.copy(I_i), np.copy(S_i)
 
-    lattices = []
+    lattices_I = []
+    lattices_S = []
+    norms = []
 
     # Set up AerSimulator in advance (we only need to do this once)
     if "GPU" in AerSimulator().available_devices():
@@ -171,19 +174,13 @@ def simulate(
     for timestep in range(n_timesteps+1):
         print(f"========== Timestep {timestep} / Time {timestep*delta_t} ==========")
 
-        qc = qc_0
-        # qc = qc_prev
-
-        if "initial" in statevector_analysis_options:
-            initial_statevector = Statevector(qc)
-            print("Initial statevector:", statevector_to_str(np.array(initial_statevector)))
-
-        print("--- new timestep", time.time())
-
         print("--- constructing circuit", time.time())
 
+        qc = qc_0
+
+        # @TEST
         print("trying to recover intensities and sources:\n", I_prev, "\n", S_prev)
-        SPCircuit = state_preparation(
+        SPCircuit, norm = state_preparation(
             I_prev, S_prev if timestep >= 0 else np.zeros((M,m)),
             n, m,
             N,
@@ -191,7 +188,8 @@ def simulate(
             coord_idx_map, m_max_bin,
             boundary_idxs, boundary_conditions,
             n_qubits, n_qubits_ancilla,
-            qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla
+            qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
+            verbose=True
         )
         qc = qc.compose(
             SPCircuit,
@@ -199,18 +197,28 @@ def simulate(
         )
         qc.barrier()
 
+        if "prepared" in statevector_analysis_options:
+            print("--- initial statevector analysis", time.time())
+            statevector_analysis_deep(
+                qc,
+                m,
+                N,
+                idx_coord_map,
+                lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+                verbose=True
+            )
+
         # At the zeroth timestep, we only perform state preparation
         if timestep >= 1:
-            qc = qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
-            qc.barrier()
+            if ASCircuit is not None:
+                qc = qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
+                qc.barrier()
 
             qc = qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
 
-            # @TEST
-            if with_angular_redistribution and timestep >= 1:
-                qc = qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
-                qc.barrier()
+            qc = qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
+            qc.barrier()
 
             qc = qc.compose(PCircuit, qreg_lattice[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
@@ -236,7 +244,7 @@ def simulate(
                 N,
                 idx_coord_map,
                 lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
-                verbose=verbose
+                verbose=True
             )
 
         # Perform measurements to construct lattice
@@ -245,9 +253,10 @@ def simulate(
 
         print("--- transpiling and running", time.time())
 
+        shots = 2**16
         qc_transpiled = transpile(qc_meas, backend, optimization_level=3)
         # print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
-        result = backend.run(qc_transpiled, shots=int(1E3)).result()
+        result = backend.run(qc_transpiled, shots=shots).result()
         counts = result.get_counts(qc_transpiled)
 
         print("--- wrapping up", time.time())
@@ -256,51 +265,54 @@ def simulate(
         print("Full counts:", counts)
         print("Post-selected counts:", counts_post)
 
+        full_norm = norm * 2
+
         lattice_I = measurements_to_lattice(
             0,
             m,
             N,
-            counts,
+            counts, shots,
             idx_coord_map,
             lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
             verbose=True
         )
+        lattice_I *= full_norm
         if np.linalg.norm(lattice_I) > 0:
-            # print(lattice_I/np.linalg.norm(lattice_I))
             print(lattice_I)
         else:
             print("intensities are empty")
 
-        if save_lattices or timestep == n_timesteps:
-            lattices.append(lattice_I)
-
-        # @TODO - we have to be careful with normalization at this point because future emission
-        #         steps may add a disproportionate amplitude (and thus intensity) relative
-        #         to the existing radiation, as evidenced by the point_source_1D test case
-        # I_prev = lattice_I.reshape((M, m), copy=True)
         I_prev = np.copy(lattice_I).reshape((M, m))
 
         # @TEST
-        # lattice_S = measurements_to_lattice(
-        #     1,
-        #     m,
-        #     N,
-        #     counts,
-        #     idx_coord_map,
-        #     lattice_qubits, direction_qubits, direction_qubits, switch_qubits, ancilla_qubits,
-        #     verbose=True
-        # )
-        # if np.linalg.norm(lattice_S) > 0:
-        #     # print(lattice_S/np.linalg.norm(lattice_S))
-        #     print(lattice_S)
-        # else:
-        #     print("sources are empty")
+        lattice_S = measurements_to_lattice(
+            1,
+            m,
+            N,
+            counts, shots,
+            idx_coord_map,
+            lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
+            verbose=True
+        )
+        lattice_S *= full_norm
+        if np.linalg.norm(lattice_S) > 0:
+            print(lattice_S)
+        else:
+            print("sources are empty")
 
-        if save_circuit or timestep == n_timesteps:
-            qc.draw(output="mpl", filename="outputs/qc.png")
+        S_prev = np.copy(lattice_S).reshape((M, m))
+
+        # Save output as specified
+        if save_lattices or timestep == n_timesteps:
+            lattices_I.append(lattice_I)
+            lattices_S.append(lattice_S)
+
+        # @TEST
+        # if save_circuit or timestep == n_timesteps:
+        #     qc.draw(output="mpl", filename="outputs/qc.png")
 
     time_stop = time.time()
     print(f"Total time: {time_stop-time_start} s")
 
-    return lattices
+    return lattices_I, lattices_S, norms
 

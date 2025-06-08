@@ -107,7 +107,7 @@ def statevector_analysis_deep(
     resultant_counts = dict(zip(resultant_outcomes, resultant_counts_list))
     print("Counts dictionary:", resultant_counts)
 
-    print("Intensity lattice:", measurements_to_lattice(
+    print("Intensity lattice:\n", measurements_to_lattice(
         0,
         m, N,
         resultant_counts,
@@ -116,7 +116,7 @@ def statevector_analysis_deep(
         verbose=True
     ))
 
-    print("Source lattice:", measurements_to_lattice(
+    print("Source lattice:\n", measurements_to_lattice(
         1,
         m, N,
         resultant_counts,

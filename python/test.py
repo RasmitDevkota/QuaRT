@@ -232,9 +232,10 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3):
 
     np.save(f"outputs/lattice_iso_src_{n_timesteps}_{N[0]}-{N[1]}_{m}.npy", lattices_I)
 
-    analysis_isotropic_source(m=m, N=N, n_timesteps=n_timesteps)
+    analysis_isotropic_source(n=n, m=m, N=N, n_timesteps=n_timesteps)
 
-def analysis_isotropic_source(n=UNUSED, m=8, N=None, n_timesteps=3):
+def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3):
+    n = int(n)
     if N is None:
         N = [8, 8]
     elif isinstance(N, str):

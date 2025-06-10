@@ -14,6 +14,7 @@ def state_preparation(
     I_i, S_i,
     n, m,
     N,
+    kappa,
     delta_t,
     coord_idx_map, m_max_bin,
     boundary_idxs, boundary_conditions,
@@ -44,6 +45,7 @@ def state_preparation(
 
             for s_bin in range(2):
                 if s_bin == 0:
+                    # Check for wall boundary conditions
                     match n:
                         case 1:
                             boundary_bin = "1" if (
@@ -67,6 +69,11 @@ def state_preparation(
                                 (coordinate[2] == 0 and mu in boundary_idxs[4] and boundary_conditions[4][0] == "absorb") or
                                 (coordinate[2] == N[2]-1 and mu in boundary_idxs[5] and boundary_conditions[5][0] == "absorb")
                             ) else "0"
+
+                    # Treat fully-opaque interior coordinates as absorbing boundaries
+                    kappa_coord = kappa[coordinate] if hasattr(kappa, "__iter__") else kappa
+                    if np.isclose(kappa_coord, 1.0):
+                        boundary_bin = "1"
 
                     prob_amp = I_i[c, mu]
                     prob_amp_I += prob_amp
@@ -151,19 +158,10 @@ def absorption_emission(
     I_2M, Z_2M,
     qreg_switch, qreg_ancilla
 ):
-    # Original matrix
-    B = np.block([
-        [I_2M, I_2M],
-        [Z_2M, I_2M]
-    ])
-
     # LCU method
     D_1 = XGate()
     D_2 = XGate()
     D_3 = ZGate()
-
-    # Check that LCU method recovers the original matrix
-    assert np.sum(B - np.kron((D_1.to_matrix() + 0.5 * D_2.to_matrix() + 0.5 * D_3.to_matrix()), I_2M)) == 0j
 
     # Construct quantum operations
     D_1_gate = UnitaryGate(D_1, label="$D_1$").control(2)

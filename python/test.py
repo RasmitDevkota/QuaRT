@@ -249,10 +249,10 @@ def analysis_isotropic_source(n=UNUSED, m=8, N=None, n_timesteps=3):
     fig, ax = plt.subplots(ncols=n_timesteps+1)
 
     for timestep, lattice in enumerate(lattices):
-        if N == 2:
+        if n == 2:
             # Plot the entire lattice
             ax[timestep].imshow(lattice.sum(axis=2).T)
-        elif N == 3:
+        elif n == 3:
             # Plot the z=0 slice
             ax[timestep].imshow(lattice.sum(axis=2)[:, 0, :].T)
 

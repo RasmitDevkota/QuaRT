@@ -63,7 +63,10 @@ def simulate(
 
     # Absorption-Scattering, Absorption-Emission, Angular Redistribution, Propagation, and Boundary Condition circuits are constant for time-independent simulation setups
     ASCircuit = None
-    if sigma > 0.0:
+    if (
+        (isinstance(sigma, float) and sigma > 0.0) or
+        (hasattr(sigma, "__iter__") and np.count_nonzero(sigma) > 0)
+    ):
         ASCircuit = absorption_scattering(
             kappa, sigma,
             delta_t,
@@ -108,7 +111,11 @@ def simulate(
     # @TEST
     BCCircuit = None
     boundary_conditions = [("absorb", None)]*4
-    if boundary_conditions is not None:
+    if (
+        (boundary_conditions is not None) or
+        (isinstance(kappa, float) and kappa > 0.0) or
+        (hasattr(kappa, "__iter__") and np.count_nonzero(kappa) > 0)
+    ):
         if any([boundary_condition[0] != "periodic" for boundary_condition in boundary_conditions]):
             print(f"Applying special boundary conditions: {boundary_conditions}")
 
@@ -184,6 +191,7 @@ def simulate(
             I_prev, S_prev if timestep >= 0 else np.zeros((M,m)),
             n, m,
             N,
+            kappa,
             delta_t,
             coord_idx_map, m_max_bin,
             boundary_idxs, boundary_conditions,
@@ -253,7 +261,7 @@ def simulate(
 
         print("--- transpiling and running", time.time())
 
-        shots = 2**16
+        shots = 2**15
         qc_transpiled = transpile(qc_meas, backend, optimization_level=3)
         # print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
         result = backend.run(qc_transpiled, shots=shots).result()

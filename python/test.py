@@ -291,8 +291,9 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_timesteps=5):
 
     src_lattice = np.zeros(shape=(*N, m))
 
+    beam_profile_uniform = lambda jval, kval : 1
     beam_profile_linear = lambda jval, kval : jval - np.abs(kval)
-    beam_profile_normal = lambda jval, kval : np.exp(-k**2)
+    beam_profile_normal = lambda jval, kval : np.exp(-kval**2)
 
     for x in range(-hw, hw+1):
         if m == 8:
@@ -303,9 +304,6 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_timesteps=5):
             src_lattice[3*N[0]//4+x, N[1]-1, 7] = beam_profile_linear(hw, x)
         else:
             raise ValueError(f"Crossing radiation beams test isn't implemented for m={m}")
-
-    # @TEST
-    # plt.imshow(np.sum(src_lattice, axis=2).T)
 
     S_i = lattice_to_vector(src_lattice)
 
@@ -336,17 +334,23 @@ def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, n_tim
 
     lattices = np.load(f"outputs/lattice_crb_{n_timesteps}_{N[0]}-{N[1]}_{hw}.npy")
 
-    ncols = min(n_timesteps+1, 6)
+    plot_timesteps = sorted(set([*range(0, n_timesteps+1, int(np.ceil(n_timesteps/6))), n_timesteps]))
+    ncols = len(plot_timesteps)
+
     fig, ax = plt.subplots(ncols=ncols)
 
-    for timestep in range(n_timesteps+1):
-        if n_timesteps <= 5 or (timestep % ncols) == 0:
-            lattice = lattices[timestep]
+    # Track axes index t separately from timestep (since we only plot a subset of the timesteps)
+    t = 0
+    for timestep in plot_timesteps:
+        lattice = lattices[timestep]
 
-            ax[timestep].imshow(lattice.sum(axis=2).T)
+        ax[t].imshow(lattice.sum(axis=2).T)
+        
+        ax[t].set_title(f"Timestep {timestep}")
 
-            ax[timestep].set_title(f"Timestep {timestep}")
+        t += 1
 
+    plt.savefig(f"outputs/plot_crb_{N[0]}-{N[1]}_{hw}_{n_timesteps}.png", dpi=500)
     plt.show()
 
 # Shadow test

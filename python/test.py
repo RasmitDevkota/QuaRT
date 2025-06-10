@@ -29,9 +29,8 @@ def test_point_source_1D(N=None, n_timesteps=10):
     I_i = lattice_to_vector(rad_lattice)
 
     src_lattice = np.zeros(shape=(*N, m))
-    # src_lattice[N[0]//2, :] = 1
+    src_lattice[N[0]//2, :] = 1
     # src_lattice[0, 1] = 1
-    src_lattice[0, 1] = 1
     S_i = lattice_to_vector(src_lattice)
 
     lattices_I, lattices_S, norms = simulate(
@@ -196,6 +195,9 @@ def analysis_redistribution_spread(n=UNUSED, m=8, mu_0=0, alpha=UNUSED, N=UNUSED
 # Isotropic source test
 def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3):
     n = int(n)
+    if n == 1:
+        raise ValueError("Isotropic source test can only be run in 2 or 3 dimensions; for 1 dimension, consider the point_source_1D test")
+
     m = int(m)
 
     if N is None:
@@ -247,7 +249,12 @@ def analysis_isotropic_source(n=UNUSED, m=8, N=None, n_timesteps=3):
     fig, ax = plt.subplots(ncols=n_timesteps+1)
 
     for timestep, lattice in enumerate(lattices):
-        ax[timestep].imshow(lattice.sum(axis=2).T)
+        if N == 2:
+            # Plot the entire lattice
+            ax[timestep].imshow(lattice.sum(axis=2).T)
+        elif N == 3:
+            # Plot the z=0 slice
+            ax[timestep].imshow(lattice.sum(axis=2)[:, 0, :].T)
 
         ax[timestep].set_title(f"Timestep {timestep}")
 
@@ -367,15 +374,18 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5):
         src_lattice[1*N[0]//4, N[1]//2] = 2
 
         R = np.sqrt((N[0]**2+N[1]**2)/4)
-        a = 0.05
-        b = 0.1
-        h = N[0] / 3
-        k = N[1] / 2
+        a = 0.05 # Fractional width of semi-major axis
+        b = 0.1 # Fractional width of semi-minor axis
+        h = (N[0]-1) / 3
+        k = (N[1]-1) / 2
     else:
         # Option 2 (default): Construct source on left wall
         source_type = "wall"
-        if m == 8:
-            src_lattice[0, :, 0] = 1
+        if m == 4:
+            src_lattice[1, :, 2] = 1
+        elif m == 8:
+            # src_lattice[1, :, 0] = 1
+            src_lattice[1, :, (0,2)] = 1
             # src_lattice[0, :, 4] = 1
             # src_lattice[0, :, 7] = 1
         elif m == 16:
@@ -385,11 +395,13 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5):
         else:
             raise ValueError(f"Shadow test isn't implemented for m={m}")
 
-        R = np.sqrt((N[0]**2+N[1]**2)/2)
-        a = 0.05
-        b = 0.1
-        h = N[0] / 2
-        k = N[1] / 2
+        R = np.sqrt((N[0]**2+N[1]**2))
+        a = 0.125 # Fractional width of semi-major axis
+        b = 0.125 # Fractional width of semi-minor axis
+        h = (N[0]-1) / 2
+        k = (N[1]-1) / 2
+
+    print(h, k)
 
     S_i = lattice_to_vector(src_lattice)
 
@@ -397,11 +409,11 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5):
     X, Y = np.meshgrid(range(N[0]), range(N[1]))
     opaque_ellipse = ((X - h)/a) ** 2 + ((Y - k)/b) ** 2 <= R**2
     kappa = np.zeros((N[0], N[1]))
-    kappa[opaque_ellipse] = 1
-    plt.imshow(kappa)
+    kappa[opaque_ellipse] = 1.0
+    print(kappa)
 
-    # boundary_conditions = [("absorb", None)]*4
-    boundary_conditions = [("periodic", None)]*4
+    boundary_conditions = [("absorb", None)]*4
+    # boundary_conditions = [("periodic", None)]*4
 
     lattices_I, lattices_S, norms = simulate(
         I_i, S_i,
@@ -432,10 +444,22 @@ def analysis_shadow(n=UNUSED, m=UNUSED, source_type=None, N=None, n_timesteps=5)
 
     lattices = np.load(f"outputs/lattice_shadow-{source_type}_{n_timesteps}_{N[0]}-{N[1]}.npy")
 
-    fig, ax = plt.subplots()
+    # plot_timesteps = sorted(set([*range(0, n_timesteps+1, int(np.ceil(n_timesteps/6))), n_timesteps]))
+    plot_timesteps = range(n_timesteps+1)
+    ncols = len(plot_timesteps)
 
-    ax.imshow(lattice[-1].sum(axis=2).T)
-    ax.set_title(f"Radiation intensity - Timestep {timestep}")
+    fig, ax = plt.subplots(ncols=ncols)
+
+    # Track axes index t separately from timestep (since we only plot a subset of the timesteps)
+    t = 0
+    for timestep in plot_timesteps:
+        lattice = lattices[timestep]
+
+        ax[t].imshow(lattice.sum(axis=2).T)
+        
+        ax[t].set_title(f"Timestep {timestep}")
+
+        t += 1
 
     plt.savefig(f"outputs/plot_shadow-{source_type}_{N[0]}-{N[1]}_{n_timesteps}.png", dpi=500)
     plt.show()

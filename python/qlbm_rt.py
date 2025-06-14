@@ -77,6 +77,7 @@ def simulate(
 
     # @TEST
     # If there are more than one non-zero entries, we use angular redistribution
+    ARCircuit = None
     with_angular_redistribution = True or angular_redistribution_coefficients is not None
     if with_angular_redistribution:
         print("Applying angular redistribution")
@@ -225,8 +226,9 @@ def simulate(
             qc = qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
 
-            qc = qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
-            qc.barrier()
+            if ARCircuit is not None:
+                qc = qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
+                qc.barrier()
 
             qc = qc.compose(PCircuit, qreg_lattice[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:])
             qc.barrier()
@@ -273,6 +275,7 @@ def simulate(
         print("Full counts:", counts)
         print("Post-selected counts:", counts_post)
 
+        # @TEST
         full_norm = norm * 2
 
         lattice_I = measurements_to_lattice(

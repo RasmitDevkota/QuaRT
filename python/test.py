@@ -30,7 +30,6 @@ def test_point_source_1D(N=None, n_timesteps=10):
 
     src_lattice = np.zeros(shape=(*N, m))
     src_lattice[N[0]//2, :] = 1
-    # src_lattice[0, 1] = 1
     S_i = lattice_to_vector(src_lattice)
 
     lattices_I, lattices_S, norms = simulate(
@@ -85,15 +84,16 @@ def test_unidirectional_source(n=2, m=8, N=None, n_timesteps=3):
     M = np.prod(N)
 
     # @TODO - apply multiprocessing
-    lattices = [] # shape (mu, n_timesteps+1, *N, m)
+    lattices_I = [] # shape (mu, n_timesteps+1, *N, m)
     for mu in range(m):
         I_i = np.zeros(shape=(M, m))
 
         src_lattice = np.zeros(shape=(*N, m))
         src_lattice[*[Ni//2 for Ni in N], mu] = 1
+        src_lattice = np.transpose(src_lattice, (1, 0, 2))
         S_i = lattice_to_vector(src_lattice)
 
-        lattices_mu = simulate(
+        lattices_I_mu, lattices_S_mu, norms = simulate(
             I_i, S_i,
             n, m,
             N,
@@ -101,7 +101,7 @@ def test_unidirectional_source(n=2, m=8, N=None, n_timesteps=3):
             save_lattices=True
         )
 
-        lattices.append(lattices_mu)
+        lattices_I.append(lattices_I_mu)
 
     np.save(f"outputs/lattice_uni_src_{n_timesteps}_{m}.npy", lattices_I)
 
@@ -126,7 +126,7 @@ def analysis_unidirectional_source(n=UNUSED, m=8, N=UNUSED, n_timesteps=3):
             print(timestep, sumspwn, sums, "-", lttc)
 
             lattice[*[Ni//2 for Ni in N] ,:] = 0.25 * np.sum(lattice)
-            ax[mu][timestep].imshow(lattice.sum(axis=2).T)
+            ax[mu][timestep].imshow(lattice.sum(axis=2))
 
             ax[mu][timestep].set_title(f"Direction {mu} - Timestep {timestep}")
 
@@ -186,7 +186,7 @@ def analysis_redistribution_spread(n=UNUSED, m=8, mu_0=0, alpha=UNUSED, N=UNUSED
     fig, ax = plt.subplots(ncols=n_timesteps+1)
 
     for timestep, lattice in enumerate(lattices):
-        ax[timestep].imshow(lattice.sum(axis=2).T[:, ::-1])
+        ax[timestep].imshow(lattice.sum(axis=2))
 
         ax[timestep].set_title(f"Timestep {timestep}")
 
@@ -213,6 +213,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3):
     # rad_lattice[*[N_i//2 for N_i in N], :] = 1
     I_i = lattice_to_vector(rad_lattice)
 
+    # @TEST
     src_lattice = np.zeros(shape=(*N, m))
     src_lattice[*[N_i//2 for N_i in N], :] = 1
     S_i = lattice_to_vector(src_lattice)
@@ -252,10 +253,10 @@ def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3):
     for timestep, lattice in enumerate(lattices):
         if n == 2:
             # Plot the entire lattice
-            ax[timestep].imshow(lattice.sum(axis=2).T)
+            ax[timestep].imshow(lattice.sum(axis=2))
         elif n == 3:
             # Plot the z=0 slice
-            ax[timestep].imshow(lattice.sum(axis=2)[:, 0, :].T)
+            ax[timestep].imshow(lattice.sum(axis=2)[:, 0, :])
 
         ax[timestep].set_title(f"Timestep {timestep}")
 
@@ -297,8 +298,8 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, n_timesteps=5):
 
     for x in range(-hw, hw+1):
         if m == 8:
-            src_lattice[1*N[0]//3+x, N[1]-2, 5] = beam_profile_linear(hw, x)
-            src_lattice[2*N[0]//3+x, N[1]-2, 4] = beam_profile_linear(hw, x)
+            src_lattice[1*N[0]//3+x, N[1]-1, 5] = beam_profile_linear(hw, x)
+            src_lattice[2*N[0]//3+x, N[1]-1, 4] = beam_profile_linear(hw, x)
         elif m == 16:
             src_lattice[1*N[0]//4+x, N[1]-1, 6] = beam_profile_linear(hw, x)
             src_lattice[3*N[0]//4+x, N[1]-1, 7] = beam_profile_linear(hw, x)
@@ -344,8 +345,8 @@ def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, n_tim
     for timestep in plot_timesteps:
         lattice = lattices[timestep]
 
-        ax[t].imshow(lattice.sum(axis=2).T)
-        
+        ax[t].imshow(lattice.sum(axis=2))
+
         ax[t].set_title(f"Timestep {timestep}")
 
         t += 1
@@ -460,7 +461,7 @@ def analysis_shadow(n=UNUSED, m=UNUSED, source_type=None, N=None, n_timesteps=5)
     for timestep in plot_timesteps:
         lattice = lattices[timestep]
 
-        ax[t].imshow(lattice.sum(axis=2).T)
+        ax[t].imshow(lattice.sum(axis=2))
         
         ax[t].set_title(f"Timestep {timestep}")
 

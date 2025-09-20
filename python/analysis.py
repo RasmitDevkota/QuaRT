@@ -31,7 +31,7 @@ def measurements_to_lattice(
 			lattice_direction_bin = "".join(outcome[l] for l in direction_qubits)#[::-1]
 			mu = int(lattice_direction_bin, 2)
 			
-			lattice[*lattice_point, mu] += count/shots
+			lattice[*lattice_point, mu] += np.sqrt(count/shots)
 			
 			if verbose:
 				print(f"Counts for outcome {outcome} at point {lattice_point_bin} ({lattice_point}), in direction {mu} ({lattice_direction_bin}): {count}")

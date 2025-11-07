@@ -1,5 +1,5 @@
 import numpy as np
-np.set_printoptions(linewidth=1000)
+np.set_printoptions(threshold=np.inf)
 
 import matplotlib.pyplot as plt
 

@@ -11,6 +11,9 @@ def compute_memory_requirements(
     include_BC=False,
     verbose=False
 ):
+    """Compute number of qubits needed for each register of quantum circuit.
+    """
+
     n_qubits_lattice = int(np.ceil(np.log2(M_0)))
     n_qubits_boundary = 1
     n_qubits_direction = int(np.ceil(np.log2(m)))
@@ -59,6 +62,9 @@ def allocate_registers(
     n_qubits,
     n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
 ):
+    """Allocate registers of quantum circuit.
+    """
+
     qreg_lattice = QuantumRegister(n_qubits_lattice, name="L")
     qreg_boundary = QuantumRegister(n_qubits_boundary, name="B")
     qreg_direction = QuantumRegister(n_qubits_direction, name="D")
@@ -69,6 +75,9 @@ def allocate_registers(
     return qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure
 
 def compute_binary_representations(m, M, verbose=False):
+    """Compute binary representations of important values.
+    """
+
     coordinate_max = M
     coordinate_max_bin = bin(coordinate_max-1)[2:]
 
@@ -81,7 +90,9 @@ def compute_binary_representations(m, M, verbose=False):
     return coordinate_max_bin, m_max_bin
 
 def map_indices_coordinates(N, coordinate_max_bin, verbose=False):
-    # Construct mappings from binary coordinate indices to coordinates
+    """Construct mappings from binary coordinate indices to coordinates.
+    """
+
     idx_coord_map = {}
 
     c = 0
@@ -100,6 +111,9 @@ def map_indices_coordinates(N, coordinate_max_bin, verbose=False):
     return idx_coord_map, coord_idx_map
 
 def construct_identity_matrices(M):
+    """Construct useful identity matrices of different dimensions once.
+    """
+    
     I_2 = np.eye((2))
     I_M = np.eye((M))
     I_2M = np.kron(I_2, I_M)
@@ -108,10 +122,10 @@ def construct_identity_matrices(M):
 
     return I_2, I_M, I_2M, I_4M, Z_2M
 
-def vector_to_lattice(v):
-    raise NotImplementedError()
-
 def lattice_to_vector(lattice):
+    """Construct statevector representation of data on a lattice.
+    """
+
     N = lattice.shape[:-1]
     n = len(N)
     m = lattice.shape[-1]

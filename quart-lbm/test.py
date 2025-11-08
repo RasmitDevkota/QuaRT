@@ -216,7 +216,7 @@ def analysis_redistribution_spread(n=UNUSED, m=8, mu_0=0, alpha=UNUSED, N=UNUSED
         plt.show()
 
 # Isotropic source test
-def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None, renormalized=False, lattice_I=None, lattice_S=None):
+def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None, renormalize=False, lattice_I=None, lattice_S=None):
     n = int(n)
     if n == 1:
         raise ValueError("Isotropic source test can only be run in 2 or 3 dimensions; for 1 dimension, consider the point_source_1D test")
@@ -229,6 +229,8 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
         N = [int(d) for d in N.split(",")]
 
     n_timesteps = int(n_timesteps)
+
+    renormalize = isinstance(renormalize, str) and renormalize.lower() in ["true", "1"]
 
     M = np.prod(N)
 
@@ -255,7 +257,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
 
     if source_location is None or source_location.lower() == "central":
         # Central source
-        if renormalized:
+        if renormalize:
             if n == 2:
                 if m == 4:
                     lattice_S[*[N_i//2 for N_i in N], 0:4] = 1.0
@@ -506,7 +508,7 @@ def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3, share_colorbar=No
         print(f"Saved PDF to {plot_filename}")
 
 # Shadow test
-def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, lattice_I=None, lattice_S=None):
+def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=False, lattice_I=None, lattice_S=None):
     n = int(n)
     if n != 2:
         raise ValueError(f"Shadow test isn't implemented for n={n}")
@@ -561,17 +563,14 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, lattice_I=Non
 
     if source_type == "point":
         # Option 1: Isotropic source near left wall
-        # lattice_S[1*N[0]//4, N[1]//2, :] = 1
-        # lattice_S[1, N[1]//2, (1,2,3,5,6)] = 1
-        # lattice_S[2, N[1]//2, :] = 1
-        # lattice_S[1*N[0]//4, N[1]//2-1, :] = 1 # optional second source (for symmetry)
-
-        # Isotropy attempt
-        if m == 4:
-            lattice_S[2, N[1]//2, 0:4] = 1.0
-        if m == 8:
-            lattice_S[2, N[1]//2, 0:4] = 1.0
-            lattice_S[2, N[1]//2, 4:8] = 1.0/np.sqrt(2)
+        if renormalize:
+            if m == 4:
+                lattice_S[2, N[1]//2, 0:4] = 1.0
+            elif m == 8:
+                lattice_S[2, N[1]//2, 0:4] = 1.0
+                lattice_S[2, N[1]//2, 0:4] = 1.0/np.sqrt(2)
+        else:
+            lattice_S[2, N[1]//2, :] = 1.0
 
         R = 1
         a = 1/6 * N[0] # Half-width along x-axis
@@ -840,16 +839,16 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, beam_profile=None, 
         n, m,
         N,
         n_timesteps=n_timesteps,
-        save_lattices=True, save_name="crb"
+        save_lattices=True, save_name=f"crb-{beam_profile}"
     )
 
-    lattices_filename = f"outputs/lattice_crb_{n_timesteps}_{N[0]}-{N[1]}_{hw}.npy"
+    lattices_filename = f"outputs/lattice_crb-{beam_profile}_{n_timesteps}_{N[0]}-{N[1]}_{hw}.npy"
     np.save(lattices_filename, lattices_I)
     print(f"Saved full data to {lattices_filename}")
 
     analysis_crossing_radiation_beams(N=N, hw=hw, n_timesteps=n_timesteps)
 
-def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, beam_profile=UNUSED, n_timesteps=5, filename=None, save_pdf=True, show=False):
+def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, beam_profile=None, n_timesteps=5, filename=None, save_pdf=True, show=False):
     if N is None:
         N = [8, 8]
     elif isinstance(N, str):
@@ -863,7 +862,7 @@ def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, beam_
     n_timesteps = int(n_timesteps)
 
     if filename is None or (isinstance(filename, str) and filename == ""):
-        filename = f"outputs/lattice_crb_{n_timesteps}_{N[0]}-{N[1]}_{hw}.npy"
+        filename = f"outputs/lattice_crb-{beam_profile}_{n_timesteps}_{N[0]}-{N[1]}_{hw}.npy"
     lattices = np.load(filename)
 
     save_pdf = isinstance(save_pdf, str) and save_pdf.lower() in ["true", "1"]

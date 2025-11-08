@@ -36,7 +36,7 @@ exclude_patterns = [
 # -- Options for Sphinx AutoAPI ----------------------------------------------
 
 autoapi_dirs = [
-    "../../QuaRT-LBM/",
+    "../../quart-lbm/",
 ]
 
 autoapi_ignore = [
@@ -65,8 +65,6 @@ def autoapi_skip_member(app, what, name, obj, skip, options):
     Skip all members inherited from a class whose defining module is 'qiskit'.
     """
 
-    print(what, name, obj)
-    print(dir(obj))
     try:
         print(obj.docstring)
     except:

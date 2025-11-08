@@ -1,6 +1,9 @@
 import numpy as np
 
 def compute_grid_parameters(n, N, verbose=False):
+    """Compute parameters of the simulation grid.
+    """
+
     M_0 = np.prod(N)
 
     # QuaRT LBM currently only supports lattices with resolutions which are powers of 2
@@ -13,6 +16,9 @@ def compute_grid_parameters(n, N, verbose=False):
     return M_0, M
 
 def compute_scheme_velocities(n, m):
+    """Compute velocities along angular directions of lattice scheme.
+    """
+
     match n:
         case 1:
             if m == 2:
@@ -67,6 +73,9 @@ def compute_scheme_velocities(n, m):
     return idxs_dir, cs
 
 def compute_scheme_adjacencies(n, m, idxs_dir, cs):
+    """Construct matrix indicating angular direction adjacencies.
+    """
+
     match n:
         case 1:
             if m == 2:
@@ -106,9 +115,10 @@ def compute_scheme_adjacencies(n, m, idxs_dir, cs):
     return adjacencies
 
 def compute_scheme_boundaries(n, m, idxs_dir=None, cs=None):
-    # IMPORTANT - Left and right boundary indices are switched because of numpy array indexing
-    #               (technically these are top and bottom in the numpy array, but we transpose
-    #                in post-processing)
+    """Construct lists of directions along each boundary of the simulation grid.
+
+    IMPORTANT - Left and right boundary indices are switched because of numpy array indexing (technically these are top and bottom in the numpy array, but we transpose in post-processing).
+    """
 
     match n:
         case 1:

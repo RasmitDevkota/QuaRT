@@ -46,12 +46,21 @@ The source code for `QuaRT` is available on [GitHub](https://github.com/RasmitDe
 
 # Statement of need
 
+Computational cosmology is limited largely by memory limitations on classical hardware. Quantum computing presents one possible solution to this challenge through the ability to store data with only logarithmic scaling with problem size. Individual simulation steps can thus be made very high resolution and only the necessary amount of data needs to be stored classically.
 
 # Functionality
 
+The `qlbm_rt` module features the `simulate` method which is called to perform simulations with the lattice Boltzmann method.
+
+The `qlbm_circuits` module features constructors for the necessary circuits for radiative transfer simulation in 1D, 2D, and 3D, including a constructor for the novel angular redstribution step.
+
+`QuaRT` features a variety of utility methods for both general and quantum lattice Boltzmann methods in `lbm_utils` and `qlbm_utils`, respectively. It also features analysis utilities in the `analysis` module.
+
+The `test` module features a variety of common test cases used for radiative transfer codes, including the isotropic source, opaque cloud shadow, and crossing radiation beams tests.
 
 # Scholarly Work
 
+`QuaRT` is currently being used to study lattice Boltzmann methods for radiative transfer (see [@Devkota2025]).
 
 # Acknowledgements
 

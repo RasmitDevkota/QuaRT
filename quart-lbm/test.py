@@ -338,7 +338,8 @@ def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3, share_colorbar=No
     if n_timesteps == 0:
         plot_timesteps = [0, 0]
     else:
-        plot_timesteps = sorted(set([*range(0, n_timesteps+1, int(np.ceil(n_timesteps/6))), n_timesteps]))
+        # plot_timesteps = sorted(set([*range(0, n_timesteps+1, int(np.ceil(n_timesteps/6))), n_timesteps]))
+        plot_timesteps = list(range(n_timesteps+1))
 
     plot_lattices = [lattices[plot_timestep] for plot_timestep in plot_timesteps]
 
@@ -488,7 +489,7 @@ def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3, share_colorbar=No
         print(f"Saved PDF to {plot_filename}")
 
     # Plot 4: Radial anisotropy (coefficient of variation) profile
-    I_COV_list = I_std_list/I_mean_list
+    I_COV_list = I_std_list#/I_mean_list
 
     fig, ax = plt.subplots()
 
@@ -573,9 +574,9 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
             lattice_S[2, N[1]//2, :] = 1.0
 
         R = 1
-        a = 1/6 * N[0] # Half-width along x-axis
+        a = 1/8 * N[0] # Half-width along x-axis
         b = 1/6 * N[1] # Half-width along y-axis
-        h = -N[0] / 8
+        h = -N[0] / 16
         k = 0
         
         save_name = "shadow-point"
@@ -705,9 +706,9 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
 
     np.save(f"outputs/lattice_shadow-{source_type}_{n_timesteps}_{N[0]}-{N[1]}.npy", lattices_I)
 
-    analysis_shadow(source_type=source_type, N=N, n_timesteps=n_timesteps)
+    analysis_shadow(source_type=source_type, N=N, n_timesteps=n_timesteps, renormalize=renormalize)
 
-def analysis_shadow(n=UNUSED, m=UNUSED, source_type=None, N=None, n_timesteps=5, filename=None, show=False):
+def analysis_shadow(n=UNUSED, m=UNUSED, source_type=None, N=None, n_timesteps=5, renormalize=UNUSED, filename=None, show=False):
     if source_type is None or source_type not in ["point", "half-point", "wall", "half-wall"]:
         raise ValueError(f"Input '{source_type}' is not a valid source type for the shadow test")
 
@@ -817,18 +818,18 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, beam_profile=None, 
     lattice_S = np.zeros(shape=(*N, m))
 
     if beam_profile == None or beam_profile == "uniform":
-        beam_profile = lambda jval, kval : 1
+        beam_profile_callable = lambda jval, kval : 1
     elif beam_profile == "linear":
-        beam_profile = lambda jval, kval : jval - np.abs(kval)
+        beam_profile_callable = lambda jval, kval : jval - np.abs(kval)
     elif beam_profile == "gaussian":
-        beam_profile = lambda jval, kval : np.exp(-kval**2)
+        beam_profile_callable = lambda jval, kval : np.exp(-(kval/jval)**2)
     else:
         raise ValueError(f"Unrecognized input for beam_profile: '{beam_profile}'; please choose from None, 'uniform', 'linear', and 'gaussian'")
 
     for x in range(-hw, hw+1):
         if m == 8:
-            lattice_S[0, N[1]//4+x, 7] = beam_profile(hw, x)
-            lattice_S[0, N[1]-1-N[1]//4+x, 4] = beam_profile(hw, x)
+            lattice_S[0, N[1]//4+x, 7] = beam_profile_callable(hw, x)
+            lattice_S[0, N[1]-1-N[1]//4+x, 4] = beam_profile_callable(hw, x)
         else:
             raise ValueError(f"Crossing radiation beams test isn't implemented for m={m}")
 
@@ -846,7 +847,7 @@ def test_crossing_radiation_beams(n=2, m=8, N=None, hw=None, beam_profile=None, 
     np.save(lattices_filename, lattices_I)
     print(f"Saved full data to {lattices_filename}")
 
-    analysis_crossing_radiation_beams(N=N, hw=hw, n_timesteps=n_timesteps)
+    analysis_crossing_radiation_beams(N=N, hw=hw, beam_profile=beam_profile, n_timesteps=n_timesteps)
 
 def analysis_crossing_radiation_beams(n=UNUSED, m=UNUSED, N=None, hw=None, beam_profile=None, n_timesteps=5, filename=None, save_pdf=True, show=False):
     if N is None:

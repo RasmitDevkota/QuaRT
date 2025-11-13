@@ -7,8 +7,6 @@ import re
 
 from qiskit.quantum_info import Statevector, partial_trace
 
-from statevector_to_str import statevector_to_str
-
 def measurements_to_lattice(
 	quantity_idx,
 	m,
@@ -56,7 +54,7 @@ def statevector_analysis(
 		print(sv.dim, sv.num_qubits)
 		print(sv.purity())
 
-	print("Full statevector:", statevector_to_str(np.array(sv)))
+	print("Full statevector:", np.array(sv))
 
 	sv_subspace = Statevector([1,0]).tensor(Statevector([1,0])).tensor(Statevector([1,0]))
 	P_subspace = sv_subspace.to_operator()
@@ -68,17 +66,16 @@ def statevector_analysis(
 		print(sv_proj.dim, sv_proj.num_qubits)
 		print(sv_proj.purity())
 
-	print("Projected statevector:", statevector_to_str(np.array(sv_proj)))
+	print("Projected statevector:", np.array(sv_proj))
 
 	sv_lattice = partial_trace(sv_proj, auxiliary_qubits)
 
 	if verbose:
-		print(np.count_nonzero(sv_lattice), np.size(sv_L))
+		print(np.count_nonzero(sv_lattice), np.size(sv_lattice))
 		print(sv_lattice.dim, sv_lattice.num_qubits)
 		print(sv_lattice.purity())
 
-	# print("Lattice data statevector:", statevector_to_str(np.array(sv_lattice)))
-	# print("Lattice data statevector:", np.array(sv_lattice))
+	print("Lattice data statevector:", np.array(sv_lattice))
 
 	return sv, sv_proj, sv_lattice
 
@@ -91,7 +88,7 @@ def statevector_analysis_deep(
     verbose=False
 ):
     resultant_statevector = np.array(Statevector(qc))
-    resultant_string = statevector_to_str(resultant_statevector)
+    resultant_string = str(resultant_statevector)
     print("Statevector:", resultant_string)
 
     resultant_pairs = re.findall(r"([\-0-9\.]*)(\|[01]+〉)", resultant_string)

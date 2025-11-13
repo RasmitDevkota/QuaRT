@@ -10,3 +10,6 @@
 *.gif
 *.npy
 
+# Documentation
+docs/_build
+

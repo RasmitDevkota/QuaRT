@@ -11,23 +11,49 @@ from qlbm_utils import compute_memory_requirements, allocate_registers, compute_
 from lbm_utils import compute_grid_parameters, compute_scheme_velocities, compute_scheme_adjacencies, compute_scheme_boundaries
 from analysis import measurements_to_lattice, statevector_analysis, statevector_analysis_deep
 
+from typing import TYPE_CHECKING
+from typing import Iterable
+
 def simulate(
     I_i, S_i,
     n, m,
     N,
-    n_timesteps=1,
-    delta_t=1,
-    kappa=0.0,
-    sigma=0.0,
-    angular_redistribution_coefficients=None,
-    boundary_conditions=None,
-    save_lattices=False,
-    save_circuit=False,
-    save_name=None,
-    statevector_analysis_options=None,
-    norm_factor=None,
-    verbose=False
-):
+    n_timesteps: int = 1,
+    delta_t: float = 1.0,
+    kappa: float = 0.0,
+    sigma: float = 0.0,
+    angular_redistribution_coefficients: Iterable[float] | None = None,
+    boundary_conditions: Iterable | None = None,
+    save_lattices: bool = False,
+    save_circuit: bool = False,
+    save_name: str | None = None,
+    statevector_analysis_options: Iterable | None = None,
+    verbose: bool = False
+) -> tuple[Iterable, Iterable, Iterable]:
+    """Main simulation function for lattice Boltzmann radiative transfer.
+
+    Args:
+        I_i: Lattice of initial intensities.
+        S_i: Lattice of initial sources>
+        n: Number of simulation dimensions.
+        m: Number of direction vectors for the lattice Boltzmann method.
+        N: Grid dimensions.
+        n_timesteps: Number of simulation timesteps (does not include timestep 0, which can exclude certain processes).
+        delta_t: Temporal resolution of the simulation.
+        kappa: Constant or array of absorption coefficients.
+        sigma: Constant or array of scattering coefficients.
+        angular_redistribution_coefficents: Angular redistribution coefficients for use if AR is to be applied.
+        boundary_conditions: Boundary condition specifications.
+        save_lattices: Specifies whether to save the lattice at intermediate timesteps.
+        save_circuit: Specifies whether to save an image of the circuit at each timestep.
+        save_name: Unique name to be used in save files.
+        statevector_analysis_options: Any options to be used during statevector simulation.
+        verbose: Specifies whether or not to print verbose information.
+
+    Returns:
+        Intensity lattices, source lattices, and statevector norms
+    """
+
     # Record start time
     time_start = time.time()
 
@@ -60,11 +86,10 @@ def simulate(
     # Only perform AS if the angular redistribution_coefficients are specified and not all close to 1.0
     perform_AR = angular_redistribution_coefficients is not None and not np.isclose(angular_redistribution_coefficients[0], 1.0)
 
-    if norm_factor is None:
-        if perform_AR:
-            norm_factor = m/2
-        else:
-            norm_factor = m
+    if perform_AR:
+        norm_factor = m/2
+    else:
+        norm_factor = m
 
     # Only perform (special) BCs if at least one boundary condition is specified to not be periodic
     perform_BC = (

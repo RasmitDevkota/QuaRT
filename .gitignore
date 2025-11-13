@@ -3,12 +3,14 @@
 /**/__pycache__/
 
 # Outputs
+/**/data/
 /**/outputs/
 /**/frames/
 /**/lattviz_frames/
 *.png
 *.gif
 *.npy
+*.pkl
 
 # Documentation
 docs/_build

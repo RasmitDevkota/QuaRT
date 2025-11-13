@@ -264,6 +264,10 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
                 elif m == 8:
                     lattice_S[*[N_i//2 for N_i in N], 0:4] = 1.0
                     lattice_S[*[N_i//2 for N_i in N], 4:8] = 1.0/np.sqrt(2)
+                elif m == 16:
+                    lattice_S[*[N_i//2 for N_i in N], 0:4] = 1.0
+                    lattice_S[*[N_i//2 for N_i in N], 4:8] = 1.0/np.sqrt(2)
+                    lattice_S[*[N_i//2 for N_i in N], 4:8] = 1.0/np.sqrt(5)
             elif n == 3:
                 lattice_S[*[N_i//2 for N_i in N], :] = 1.0
         else:
@@ -286,7 +290,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
 
     S_i = lattice_to_vector(lattice_S)
 
-    alpha = 0.33/(m/4)
+    alpha = 0.50/(m/4)
     angular_redistribution_coefficients = np.zeros((m,))
     angular_redistribution_coefficients[0] = alpha
     angular_redistribution_coefficients[+1] = (1-alpha)/2
@@ -569,7 +573,7 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
                 lattice_S[2, N[1]//2, 0:4] = 1.0
             elif m == 8:
                 lattice_S[2, N[1]//2, 0:4] = 1.0
-                lattice_S[2, N[1]//2, 0:4] = 1.0/np.sqrt(2)
+                lattice_S[2, N[1]//2, 5:8] = 1.0/np.sqrt(2)
         else:
             lattice_S[2, N[1]//2, :] = 1.0
 

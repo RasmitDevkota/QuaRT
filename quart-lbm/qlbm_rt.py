@@ -373,8 +373,8 @@ def simulate(
             lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
             verbose=True
         )
-        # @TODO - check
-        lattice_S *= m / delta_t * global_norm
+        # @TODO - check normalization factor
+        lattice_S *= m / delta_t * global_norm / 2
         if verbose:
             if np.linalg.norm(lattice_S) > 0:
                 print(lattice_S)

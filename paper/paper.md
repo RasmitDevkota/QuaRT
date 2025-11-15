@@ -42,7 +42,7 @@ bibliography: paper.bib
 
 `QuaRT` is a Python library for quantum simulation of radiative transfer in astrophysical and cosmological problems.
 
-The source code for `QuaRT` is available on [GitHub](https://github.com/RasmitDevkota/QuaRT/). It can be installed via `pip` from the [`pypi` index](https://pypi.org/project/TODO/). Its [documentation](https://pyquart.readthedocs.io/) is hosted publicly.
+The source code for `QuaRT` is available on [GitHub](https://github.com/RasmitDevkota/QuaRT/). It can be installed via `pip` from the [`pypi` index](https://pypi.org/project/PyQuaRT/). Its [documentation](https://pyquart.readthedocs.io/) is hosted publicly.
 
 # Statement of need
 

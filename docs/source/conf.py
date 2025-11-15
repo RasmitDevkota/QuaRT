@@ -6,10 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "QuaRT-LBM"
+project = "PyQuaRT"
 copyright = "2025, Rasmit Devkota and John Wise"
 author = "Rasmit Devkota and John Wise"
-release = "0.1.0"
+release = "1.0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -36,7 +36,7 @@ exclude_patterns = [
 # -- Options for Sphinx AutoAPI ----------------------------------------------
 
 autoapi_dirs = [
-    "../../quart-lbm/",
+    "../../quart/",
 ]
 
 autoapi_ignore = [

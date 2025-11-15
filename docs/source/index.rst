@@ -40,7 +40,7 @@ The latest nightly version of QuaRT can be installed from source as follows:
 Documentation
 -------------------------------
 
-Documentation is hosted online on ReadtheDocs at `https://quart-lbm.readthedocs.io <https://quart-lbm.readthedocs.io>`__.
+Documentation is hosted online on ReadtheDocs at `https://pyquart.readthedocs.io <https://pyquart.readthedocs.io>`__.
 
 Acknowledgements
 ----------------

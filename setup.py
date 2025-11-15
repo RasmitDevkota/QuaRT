@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="QuaRT",
-    version="0.1.0",
+    name="PyQuaRT",
+    version="1.0.0",
     author="Computational Cosmology at Georgia Tech",
     author_email="rdevkota3@gatech.edu",
     url="https://github.com/RasmitDevkota/QuaRT/",

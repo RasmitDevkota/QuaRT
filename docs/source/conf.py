@@ -36,7 +36,7 @@ exclude_patterns = [
 # -- Options for Sphinx AutoAPI ----------------------------------------------
 
 autoapi_dirs = [
-    "../../quart/",
+    "../../pyquart/",
 ]
 
 autoapi_ignore = [

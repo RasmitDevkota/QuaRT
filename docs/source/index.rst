@@ -22,7 +22,7 @@ The latest stable release can be installed from the PyPI index as follows:
     python -m pip install virtualenv
     python -m virtualenv .venv
     .venv/bin/activate
-    python -m pip install QuaRT
+    python -m pip install PyQuaRT
 
 The source code for the latest stable release can be found under the latest ``stable/*`` branch.
 

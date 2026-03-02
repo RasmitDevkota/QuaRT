@@ -7,6 +7,27 @@ import re
 
 from qiskit.quantum_info import Statevector, partial_trace
 
+def postselect_counts(
+    counts,
+    kappa,
+    idx_coord_map,
+    n_qubits_ancilla,
+    lattice_qubits
+):
+    items_post = []
+    for measurement, count in counts.items():
+        if not measurement.startswith("0"*n_qubits_ancilla):
+            continue
+
+        lattice_point_bin = "".join(measurement[l] for l in lattice_qubits)
+        lattice_point = idx_coord_map[lattice_point_bin]
+        if np.isclose(kappa[*lattice_point], 1.0):
+            continue
+
+        items_post.append((measurement, count))
+
+    return dict(items_post)
+
 def measurements_to_lattice(
 	quantity_idx,
 	m,

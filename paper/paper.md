@@ -28,11 +28,11 @@ authors:
     orcid: 0000-0003-1173-8847
     affiliation: "1,3"
 affiliations:
- - name: School of Physics, Georgia Institute of Technology, Atlanta, GA
+ - name: School of Physics, Georgia Institute of Technology, Atlanta, GA, USA
    index: 1
- - name: School of Mathematics, Georgia Institute of Technology, Atlanta, GA
+ - name: School of Mathematics, Georgia Institute of Technology, Atlanta, GA, USA
    index: 2
- - name: Center for Relativistic Astrophysics, Georgia Institute of Technology, Atlanta, GA
+ - name: Center for Relativistic Astrophysics, Georgia Institute of Technology, Atlanta, GA, USA
    index: 3
 date: XX November 2025
 bibliography: paper.bib

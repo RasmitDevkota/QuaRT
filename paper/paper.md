@@ -34,7 +34,7 @@ affiliations:
    index: 2
  - name: Center for Relativistic Astrophysics, Georgia Institute of Technology, Atlanta, GA, USA
    index: 3
-date: XX November 2025
+date: XX March 2026
 bibliography: paper.bib
 ---
 

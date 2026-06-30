@@ -9,7 +9,7 @@ from qiskit_aer import AerSimulator
 from qlbm_circuits import state_preparation, absorption_scattering, absorption_emission, angular_redistribution, special_boundary_conditions, propagation
 from qlbm_utils import compute_memory_requirements, allocate_registers, compute_binary_representations, map_indices_coordinates, construct_identity_matrices
 from lbm_utils import compute_grid_parameters, compute_scheme_velocities, compute_scheme_adjacencies, compute_scheme_boundaries
-from analysis import measurements_to_lattice, statevector_analysis, statevector_analysis_deep
+from analysis import postselect_counts, measurements_to_lattice, statevector_analysis, statevector_analysis_deep
 
 from typing import TYPE_CHECKING
 from typing import Iterable
@@ -98,14 +98,14 @@ def simulate(
         (hasattr(kappa, "__iter__") and np.count_nonzero(kappa) > 0)
     )
 
-    n_qubits, n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla, ancilla_idxs_AS, ancilla_idxs_AE, ancilla_idxs_AR, ancilla_idxs_BC = compute_memory_requirements(
+    n_qubits, n_qubits_lattice, n_qubits_mask, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla, ancilla_idxs_AS, ancilla_idxs_AE, ancilla_idxs_AR, ancilla_idxs_BC = compute_memory_requirements(
         m, M_0,
         include_AS=perform_AS,
         include_AR=perform_AR,
         include_BC=perform_BC,
     )
 
-    qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure = allocate_registers(n_qubits, n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla)
+    qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure = allocate_registers(n_qubits, n_qubits_lattice, n_qubits_mask, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla)
 
     I_2, I_M, I_2M, I_4M, Z_2M = construct_identity_matrices(M)
 
@@ -138,8 +138,8 @@ def simulate(
         N, M,
         idxs_dir, cs,
         idx_coord_map, coord_idx_map, m_max_bin,
-        n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-        qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
+        n_qubits_lattice, n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+        qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
         verbose=False
     )
 
@@ -178,20 +178,22 @@ def simulate(
         )
 
     qc_0 = QuantumCircuit(
-        qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
+        qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
         creg_measure
     )
 
     # Log qubit usage
     lattice_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_lattice[:]]
-    auxiliary_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]]
-    direction_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_direction[:]]
+    auxiliary_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_mask[:] + qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:]]
+    mask_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_mask[:]]
     boundary_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_boundary[:]]
+    direction_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_direction[:]]
     switch_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_switch[:]]
     ancilla_qubits = [n_qubits-qc_0.qubits.index(qubit)-1 for qubit in qreg_ancilla[:]]
     print(
         f"Lattice qubits: {lattice_qubits}",
         f"Auxiliary qubits: {auxiliary_qubits}",
+        f"Mask qubits: {mask_qubits},"
         f"Boundary qubits: {boundary_qubits}",
         f"Direction qubits: {direction_qubits}",
         f"Switch qubits: {switch_qubits}",
@@ -248,12 +250,12 @@ def simulate(
             coord_idx_map, m_max_bin,
             boundary_idxs, boundary_conditions,
             n_qubits, n_qubits_ancilla,
-            qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
+            qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
             verbose=False,
             norm_factor=norm_factor
         )
         print("Composing SP")
-        qc.compose(SPCircuit, qreg_lattice[:] + qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
+        qc.compose(SPCircuit, qreg_lattice[:] + qreg_mask[:] + qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
         qc.barrier()
 
         norms.append(norm)
@@ -324,7 +326,7 @@ def simulate(
         qc_meas.measure(range(n_qubits), creg_measure)
 
         if save_circuit:
-            qc_meas.draw(output="mpl", filename="outputs/qc.png")
+            qc_meas.decompose(reps=5).draw(output="mpl", filename="outputs/qc.png")
 
         print("--- Transpiling", time.time())
 
@@ -340,9 +342,9 @@ def simulate(
         print("--- Processing results", time.time())
 
         counts = result.get_counts(qc_transpiled)
-        counts_post = dict([(measurement, count) for measurement, count in counts.items() if measurement.startswith("0"*n_qubits_ancilla)])
+        counts_post = postselect_counts(counts, kappa, idx_coord_map, n_qubits_ancilla, lattice_qubits)
         shots_post = sum(list(counts_post.values()))
-        # print("Full counts:", counts)
+        print("Full counts:", counts)
         print("Post-selected counts:", counts_post)
         print("Total post-selected counts:", shots_post)
 

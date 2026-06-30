@@ -34,9 +34,13 @@ def compute_memory_requirements(
 
     # AR
     if include_AR:
+        n_qubits_mask = 1
+
         ancilla_idxs_AR = list(range(n_qubits_ancilla, n_qubits_ancilla+2))
         n_qubits_ancilla += 2
     else:
+        n_qubits_mask = 0
+
         ancilla_idxs_AR = None
 
     # BC
@@ -46,33 +50,35 @@ def compute_memory_requirements(
     else:
         ancilla_idxs_BC = None
 
-    n_qubits = n_qubits_lattice + n_qubits_boundary + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
+    n_qubits = n_qubits_lattice + n_qubits_mask + n_qubits_boundary + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
 
     if verbose:
         print(f"Total qubits: {n_qubits}")
         print(f"Lattice qubits: {n_qubits_lattice}")
+        print(f"AR Mask qubits: {n_qubits_mask}")
         print(f"Boundary qubits: {n_qubits_boundary}")
         print(f"Direction qubits: {n_qubits_direction}")
         print(f"Switch qubits: {n_qubits_switch}")
         print(f"Ancilla qubits: {n_qubits_ancilla}")
 
-    return n_qubits, n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla, ancilla_idxs_AS, ancilla_idxs_AE, ancilla_idxs_AR, ancilla_idxs_BC
+    return n_qubits, n_qubits_lattice, n_qubits_mask, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla, ancilla_idxs_AS, ancilla_idxs_AE, ancilla_idxs_AR, ancilla_idxs_BC
 
 def allocate_registers(
     n_qubits,
-    n_qubits_lattice, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
+    n_qubits_lattice, n_qubits_mask, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla
 ):
     """Allocate registers of quantum circuit.
     """
 
     qreg_lattice = QuantumRegister(n_qubits_lattice, name="L")
+    qreg_mask = QuantumRegister(n_qubits_mask, name="M")
     qreg_boundary = QuantumRegister(n_qubits_boundary, name="B")
     qreg_direction = QuantumRegister(n_qubits_direction, name="D")
     qreg_switch = QuantumRegister(n_qubits_switch, name="S")
     qreg_ancilla = QuantumRegister(n_qubits_ancilla, name="A")
     creg_measure = ClassicalRegister(n_qubits, name="C")
 
-    return qreg_lattice, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure
+    return qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure
 
 def compute_binary_representations(m, M, verbose=False):
     """Compute binary representations of important values.

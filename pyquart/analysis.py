@@ -21,10 +21,9 @@ def postselect_counts(
 
         lattice_point_bin = "".join(measurement[l] for l in lattice_qubits)
         lattice_point = idx_coord_map[lattice_point_bin]
-        if np.isclose(kappa[*lattice_point], 1.0):
-            continue
-
-        items_post.append((measurement, count))
+        postselected_count = count * (1 - kappa[*lattice_point])
+        items_post.append((measurement, postselected_count))
+        print("postselection data:", lattice_point, count, postselected_count)
 
     return dict(items_post)
 

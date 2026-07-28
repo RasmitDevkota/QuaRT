@@ -290,6 +290,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
 
     S_i = lattice_to_vector(lattice_S)
 
+    # @TODO - optimize more rigorously
     alpha = 0.50/(m/4)
     angular_redistribution_coefficients = np.zeros((m,))
     angular_redistribution_coefficients[0] = alpha
@@ -573,14 +574,18 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
                 lattice_S[2, N[1]//2, 0:4] = 1.0
             elif m == 8:
                 lattice_S[2, N[1]//2, 0:4] = 1.0
-                lattice_S[2, N[1]//2, 5:8] = 1.0/np.sqrt(2)
+                lattice_S[2, N[1]//2, 4:8] = 1.0/np.sqrt(2)
+            else:
+                raise NotImplementedError()
         else:
             lattice_S[2, N[1]//2, :] = 1.0
+            # lattice_S[2, N[1]//2, 0:4] = 1.0
+            # lattice_S[2, N[1]//2, 4:8] = 1.0
 
         R = 1
-        a = 1/8 * N[0] # Half-width along x-axis
-        b = 1/6 * N[1] # Half-width along y-axis
-        h = -N[0] / 16
+        a = 1/6 * N[0] # Half-width along x-axis
+        b = 1/3 * N[1] # Half-width along y-axis
+        h = -N[0] / 8
         k = 0
         
         save_name = "shadow-point"
@@ -599,7 +604,7 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
 
         R = 1
         a = 1/6 * N[0] # Half-width along x-axis
-        b = 1/6 * N[1] # Half-width along y-axis
+        b = 1/4 * N[1] # Half-width along y-axis
         h = -N[0] / 8
         k = 0
         
@@ -627,7 +632,8 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
             raise NotImplementedError(f"Shadow test isn't implemented for m={m}")
 
         R = 1
-        a = 1/8 * N[0] # Half-width along x-axis b = 1/4 * N[1] # Half-width along y-axis
+        a = 1/8 * N[0] # Half-width along x-axis
+        b = 1/4 * N[1] # Half-width along y-axis
         h = -N[0] / 4
         k = 0
         
@@ -696,6 +702,8 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
     angular_redistribution_coefficients[-1] = (1-alpha)/2
 
     boundary_conditions = [("absorb", None)]*4
+    
+    # return
 
     lattices_I, lattices_S, norms = simulate(
         I_i, S_i,
@@ -745,11 +753,13 @@ def analysis_shadow(n=UNUSED, m=UNUSED, source_type=None, N=None, n_timesteps=5,
     for timestep in plot_timesteps:
         lattice = lattices[timestep]
 
-        ax[t].imshow(lattice.sum(axis=2), cmap="magma", norm=LogNorm())
+        im = ax[t].imshow(lattice.sum(axis=2), cmap="magma", norm=LogNorm())
 
         ax[t].set_title(f"Timestep {timestep}")
 
         t += 1
+    
+    plt.colorbar(im, label="I(X,Y)")
 
     plot_filename = f"outputs/plot_shadow-{source_type}_{N[0]}-{N[1]}_{n_timesteps}.png"
     plt.savefig(plot_filename, dpi=500)

@@ -12,18 +12,26 @@ def postselect_counts(
     kappa,
     idx_coord_map,
     n_qubits_ancilla,
-    lattice_qubits
+    lattice_qubits,
+    verbose=False
 ):
     items_post = []
+    
     for measurement, count in counts.items():
         if not measurement.startswith("0"*n_qubits_ancilla):
             continue
 
         lattice_point_bin = "".join(measurement[l] for l in lattice_qubits)
         lattice_point = idx_coord_map[lattice_point_bin]
-        postselected_count = count * (1 - kappa[*lattice_point])
+        
+        kappa_coord = kappa[*lattice_point] if hasattr(kappa, "__iter__") else kappa
+        
+        postselected_count = count * (1 - kappa_coord)
+        
         items_post.append((measurement, postselected_count))
-        print("postselection data:", lattice_point, count, postselected_count)
+        
+        if verbose:
+            print("Postselection data:", lattice_point, count, kappa_coord, postselected_count)
 
     return dict(items_post)
 

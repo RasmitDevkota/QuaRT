@@ -10,7 +10,7 @@ import multiprocessing as mp
 from multiprocessing import Pool
 
 from qiskit import QuantumCircuit, qpy
-from qiskit.circuit.library import UnitaryGate, XGate, ZGate
+from qiskit.circuit.library import StatePreparation, UnitaryGate, XGate, ZGate
 
 def state_preparation(
     I_i, S_i,
@@ -35,15 +35,23 @@ def state_preparation(
     if verbose:
         print("actually recovering intensities and sources:\n", I_i, "\n", S_i)
 
-    source_coordinates = np.argwhere(S_i > 0.0)
-    print("source_coordinates:", source_coordinates)
+    S_i_coords = S_i.sum(axis=-1).reshape([Ni for Ni in N])
+
+    source_coordinates = np.argwhere(S_i_coords > 0.0)
 
     for c, (coordinate, coordinate_bin) in enumerate(coord_idx_map.items()):
         coordinate_bin = coordinate_bin[::-1]
 
-        radius_AR = 3
-        mask_bool = np.any([(coordinate[0] - source_coordinate[0])**2 + (coordinate[1] - source_coordinate[1])**2 <= radius_AR**2 for source_coordinate in source_coordinates])
-        mask_bin = str(int(mask_bool))
+        if qreg_ancilla.size > 0 and qreg_mask.size > 0:
+            radius_AR = np.mean(N[:2])//4 + 0.5
+            mask_bool = np.any([(coordinate[0] - source_coordinate[0])**2 + (coordinate[1] - source_coordinate[1])**2 <= radius_AR**2 for source_coordinate in source_coordinates])
+            mask_bin = str(int(mask_bool))
+
+            if verbose:
+                if mask_bool:
+                    print(coordinate)
+        else:
+            mask_bin = ""
 
         for mu in range(m):
             mu_bin = bin(mu)[2:].zfill(len(m_max_bin))[::-1]
@@ -81,7 +89,7 @@ def state_preparation(
                 # Treat fully-opaque interior coordinates as absorbing boundaries
                 kappa_coord = kappa[coordinate] if hasattr(kappa, "__iter__") else kappa
                 if (
-                    np.isclose(kappa[coordinate], 1.0)
+                    np.isclose(kappa_coord, 1.0)
                 ):
                     boundary_bin = "1"
 
@@ -107,9 +115,7 @@ def state_preparation(
 
     qc = QuantumCircuit(qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla)
     qc.initialize(initial_statevector)
-
-    print("Exiting state_preparation...")
-
+    
     return qc, norm
 
 def absorption_scattering(
@@ -210,8 +216,8 @@ def angular_redistribution(
     idxs_dir, cs,
     adjacencies,
     idx_coord_map, coord_idx_map, m_max_bin,
-    n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-    qreg_direction, qreg_switch, qreg_ancilla,
+    n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+    qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
     ancilla_idxs_AR,
 ):
     # Construct matrices
@@ -236,39 +242,53 @@ def angular_redistribution(
         R_m[int(f"0b{mu_adj_bins[0][::-1]}", 2), int(f"0b{mu_adj_bins[-1][::-1]}", 2)] = 1
 
     # Construct quantum circuit
-    CR_p = UnitaryGate(R_p, label="$R_+$").control(3)
-    CR_m = UnitaryGate(R_m, label="$R_-$").control(3)
-
-    qc = QuantumCircuit(qreg_direction, qreg_switch, qreg_ancilla)
-
-    # Prepare initial state
-    initial_statevector = [
-        angular_redistribution_coefficients[0], # |00>
-        angular_redistribution_coefficients[+1], # |01>
-        angular_redistribution_coefficients[-1], # |10>
-        angular_redistribution_coefficients[0] # |11>
+    CR_p = UnitaryGate(R_p, label="$R_+$").control(4)
+    CR_m = UnitaryGate(R_m, label="$R_-$").control(4)
+    
+    # Construct ancilla state preparation matrices via Householder reflection
+    coefficients_AR = [
+        angular_redistribution_coefficients[0], # I is applied to |00>
+        angular_redistribution_coefficients[+1], # R_+ is applied to |01>
+        angular_redistribution_coefficients[-1], # R_- is applied to |10>
+        # angular_redistribution_coefficients[0] # I is applied to |11>
+        0
     ]
-    print(initial_statevector)
+    amplitudes_AR = np.sqrt(coefficients_AR / np.sum(coefficients_AR))
+    print(amplitudes_AR)
+    
+    reflection_axis = np.zeros_like(amplitudes_AR)
+    reflection_axis[0] = 1.0
+    reflection_axis = reflection_axis - amplitudes_AR
+    norm_squared = reflection_axis @ reflection_axis
+    if np.isclose(norm_squared, 0.0):
+        U_alpha_matrix = np.eye(len(amplitudes_AR)) - 2 * np.outer(reflection_axis, reflection_axis) / norm_squared
+    else:
+        U_alpha_matrix = np.eye(len(amplitudes_AR)) - 2 * np.outer(reflection_axis, reflection_axis) / norm_squared
+    
+    U_alpha = UnitaryGate(U_alpha_matrix, label="$U_\\text{alpha}$")
+
+    qc = QuantumCircuit(qreg_mask, qreg_direction, qreg_switch, qreg_ancilla)
+    
     qc.barrier(label="prep_A")
-    # qc.prepare_state(initial_statevector, qreg_ancilla[ancilla_idxs_AR], normalize=True)
-    qc.initialize(initial_statevector, qreg_ancilla[ancilla_idxs_AR], normalize=True)
+    qc.append(U_alpha, qreg_ancilla[ancilla_idxs_AR])
     qc.barrier(label="prep_B")
 
-    # # Flip switch so that controls act on intensity only
-    # qc.x(qreg_switch[:])
-    #
-    # # 001 -> CR_p
-    # qc.x(qreg_ancilla[ancilla_idxs_AR[0]])
-    # qc.append(CR_p, qreg_ancilla[ancilla_idxs_AR] + qreg_switch[:] + qreg_direction[:])
-    # qc.x(qreg_ancilla[ancilla_idxs_AR[0]])
-    #
-    # # 010 -> CR_m
-    # qc.x(qreg_ancilla[ancilla_idxs_AR[1]])
-    # qc.append(CR_m, qreg_ancilla[ancilla_idxs_AR] + qreg_switch[:] + qreg_direction[:])
-    # qc.x(qreg_ancilla[ancilla_idxs_AR[1]])
-    #
-    # qc.x(qreg_switch[:])
-    # qc.h(qreg_ancilla[ancilla_idxs_AR])
+    # Flip switch so that controls act on intensity only
+    qc.x(qreg_switch[:])
+    
+    # |s=0>|m=1>|a=01> -> CR_p
+    qc.x(qreg_ancilla[ancilla_idxs_AR[0]])
+    qc.append(CR_p, qreg_ancilla[ancilla_idxs_AR] + qreg_switch[:] + qreg_mask[:] + qreg_direction[:])
+    qc.x(qreg_ancilla[ancilla_idxs_AR[0]])
+    
+    # |s=0>|m=1>|a=10> -> CR_m
+    qc.x(qreg_ancilla[ancilla_idxs_AR[1]])
+    qc.append(CR_m, qreg_ancilla[ancilla_idxs_AR] + qreg_switch[:] + qreg_mask[:] + qreg_direction[:])
+    qc.x(qreg_ancilla[ancilla_idxs_AR[1]])
+    
+    qc.x(qreg_switch[:])
+    
+    qc.append(U_alpha, qreg_ancilla[ancilla_idxs_AR])
 
     return qc
 
@@ -300,13 +320,13 @@ def propagation(
     N, M,
     idxs_dir, cs,
     idx_coord_map, coord_idx_map, m_max_bin,
-    n_qubits_lattice, n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-    qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
+    n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+    qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
     with_mp=False,
     verbose=False
 ):
     # Prepare quantum circuit first since we need to construct it on the fly
-    qc = QuantumCircuit(qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla)
+    qc = QuantumCircuit(qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla)
 
     print("Available resources:", mp.cpu_count(), len(os.sched_getaffinity(0)), os.environ.get("SLURM_TASKS_PER_NODE"))
     if with_mp:
@@ -326,9 +346,9 @@ def propagation(
                 N, M,
                 cs,
                 idx_coord_map, coord_idx_map, m_max_bin,
-                n_qubits_lattice, n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-                qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
-                "qpy",
+                n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+                qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
+                None,
                 verbose
             )
             for mu in range(m)
@@ -351,9 +371,9 @@ def propagation(
                         N, M,
                         cs,
                         idx_coord_map, coord_idx_map, m_max_bin,
-                        n_qubits_lattice, n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-                        qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
-                        "qpy",
+                        n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+                        qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
+                        None,
                         verbose
                     )
                     for mu in range(m)
@@ -373,8 +393,8 @@ def single_direction_propagation(
     N, M,
     cs,
     idx_coord_map, coord_idx_map, m_max_bin,
-    n_qubits_lattice, n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-    qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
+    n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+    qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
     cache_option=None,
     verbose=False
 ):
@@ -416,9 +436,6 @@ def single_direction_propagation(
     except Exception as e:
         print(f"Could not load propagation circuit for direction {mu} for a D{n}Q{m} scheme on lattice w/ shape {N} from cache due to error '{e}'; computing...", time.time())
 
-        dim_P_mu = 2**(n_qubits_lattice)
-        P_mu = np.zeros((dim_P_mu, dim_P_mu))
-
         mu_bin = bin(mu)[2:].zfill(len(m_max_bin))
         if verbose:
             print(f"Process {os.getpid().name} processing direction {mu} (binary {mu_bin})")
@@ -427,45 +444,37 @@ def single_direction_propagation(
 
         switch_bin = "0"
 
-        ctrl_mask = "1"
         ctrl_direction = mu_bin[::-1]
         ctrl_switch = switch_bin
-        ctrl_state = ctrl_mask + ctrl_direction + ctrl_switch
-
-        print("beginning P_mu matrix computation", time.time())
-
-        for idx_init_bin, coord_init in idx_coord_map.items():
-            # Use periodic boundary conditions
-            if n == 1:
-                coord_dest = ((coord_init[0] + c_mu) % N[0],)
-            else:
-                coord_dest = tuple((coord_init[i] + c_mu[i]) % N[i] for i in range(n))
-
-            idx_dest_bin = coord_idx_map[coord_dest]
-
-            idx_init_dec = int(f"0b{idx_init_bin[::-1]}", 2)
-            idx_dest_dec = int(f"0b{idx_dest_bin[::-1]}", 2)
-
-            if verbose:
-                print(f"Propagating from coordinate {coord_init} to {coord_dest} == from binary {idx_init_bin} to binary {idx_dest_bin} == from index {idx_init_dec} to index {idx_dest_dec}")
-
-            P_mu[idx_init_dec, idx_dest_dec] = 1
-
-        # print(P_mu)
-
-        print("---")
+        ctrl_state = ctrl_direction + ctrl_switch
 
         print("beginning P_mu circuit computation", time.time())
-
-        # P_mu_circuit only acts on the lattice qubits
+        
         P_mu_circuit = QuantumCircuit(qreg_lattice)
-        P_mu_circuit.unitary(P_mu, qreg_lattice[:])
+
+        n_qubits_axis_offset = 0
+        for axis in range(n):
+            n_qubits_axis = int(round(np.log2(N[axis])))
+
+            if 2**n_qubits_axis != N[axis]:
+                raise ValueError(f"Axis resolution N[{axis}]={N[axis]} is not a power of 2, which is required for arithmetic propagation")
+            
+            qreg_axis = qreg_lattice[n_qubits_axis_offset:n_qubits_axis_offset+n_qubits_axis][::-1]
+            
+            displacement = -(c_mu[axis] if n > 1 else c_mu)
+            
+            if verbose:
+                print(f"Translating axis {axis} ({n_qubits_axis} qubits) by {displacement} for direction {mu}")
+
+            single_axis_propagation(P_mu_circuit, qreg_axis, displacement)
+
+            n_qubits_axis_offset += n_qubits_axis
 
         print("beginning CP_mu circuit computation", time.time())
 
         # CP_mu_circuit acts on the lattice qubits, but appropriately controlled by the direction and switch qubits
-        CP_mu_circuit = P_mu_circuit.control(n_qubits_mask + n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state, label=f"$P_{mu}$")
-        CP_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_mask[:] + qreg_lattice[:]
+        CP_mu_circuit = P_mu_circuit.control(n_qubits_direction + n_qubits_switch, ctrl_state=ctrl_state, label=f"$P_{mu}$")
+        CP_mu_qubits = qreg_switch[:] + qreg_direction[:] + qreg_lattice[:]
 
         print("saving propagation circuit", time.time())
 
@@ -483,11 +492,29 @@ def single_direction_propagation(
         print(f"Successfully computed propagation circuit for direction {mu} for a D{n}Q{m} scheme on lattice w/ shape {N} and saved to cache")
 
         del P_mu_circuit
-        del P_mu
 
         f.close()
     finally:
         print(f"Returning", time.time())
 
         return CP_mu_circuit, CP_mu_qubits
+
+    def single_axis_propagation(P_mu_circuit, qreg_axis, displacement):
+    for bit in range(len(qreg_axis)):
+        if not (abs(displacement) >> bit) & 1:
+            continue
+
+        qreg_field = qreg_axis[bit:]
+        n_qubits_field = len(qreg_field)
+
+        if displacement > 0:
+            for q in range(n_qubits_field-1, 0, -1):
+                P_mu_circuit.mcx(qreg_field[0:q], qreg_field[q])
+
+            P_mu_circuit.x(qreg_field[0])
+        elif displacement < 0:
+            P_mu_circuit.x(qreg_field[0])
+
+            for q in range(1, n_qubits_field):
+                P_mu_circuit.mcx(qreg_field[0:q], qreg_field[q])
 

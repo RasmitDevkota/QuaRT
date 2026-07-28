@@ -55,7 +55,7 @@ def compute_memory_requirements(
     if verbose:
         print(f"Total qubits: {n_qubits}")
         print(f"Lattice qubits: {n_qubits_lattice}")
-        print(f"AR Mask qubits: {n_qubits_mask}")
+        print(f"Angular redistribution mask qubits: {n_qubits_mask}")
         print(f"Boundary qubits: {n_qubits_boundary}")
         print(f"Direction qubits: {n_qubits_direction}")
         print(f"Switch qubits: {n_qubits_switch}")

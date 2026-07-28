@@ -80,6 +80,9 @@ def simulate(
         S_i = np.zeros(shape=(M, m))
 
     # 3. Quantum system construction
+    # Only perform AE if source is not close to 0.0
+    perform_AE = not np.isclose(np.sum(S_i), 0.0)
+
     # Only perform AS if sigma (the scattering coefficient) is not close to 0.0
     perform_AS = not np.isclose(sigma, 0.0)
 
@@ -138,8 +141,8 @@ def simulate(
         N, M,
         idxs_dir, cs,
         idx_coord_map, coord_idx_map, m_max_bin,
-        n_qubits_lattice, n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-        qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
+        n_qubits_lattice, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+        qreg_lattice, qreg_direction, qreg_switch, qreg_ancilla,
         verbose=False
     )
 
@@ -156,8 +159,8 @@ def simulate(
             idxs_dir, cs,
             adjacencies,
             idx_coord_map, coord_idx_map, m_max_bin,
-            n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
-            qreg_direction, qreg_switch, qreg_ancilla,
+            n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+            qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
             ancilla_idxs_AR,
         )
 
@@ -254,7 +257,7 @@ def simulate(
             verbose=False,
             norm_factor=norm_factor
         )
-        print("Composing SP")
+        print("Composing SP", time.time())
         qc.compose(SPCircuit, qreg_lattice[:] + qreg_mask[:] + qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
         qc.barrier()
 
@@ -293,7 +296,7 @@ def simulate(
 
             if ARCircuit is not None:
                 print("Composing AR", time.time())
-                qc.compose(ARCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
+                qc.compose(ARCircuit, qreg_mask[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
                 qc.barrier()
 
             if BCCircuit is not None:
@@ -320,42 +323,46 @@ def simulate(
                 lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
                 verbose=True
             )
-
-        # Perform measurements to construct lattice
-        qc_meas = qc
-        qc_meas.measure(range(n_qubits), creg_measure)
+        
+        qc.save_probabilities()
 
         if save_circuit:
-            qc_meas.decompose(reps=5).draw(output="mpl", filename="outputs/qc.png")
+            qc.decompose(reps=5).draw(output="mpl", filename="outputs/qc.png")
 
         print("--- Transpiling", time.time())
 
-        shots = 1E6
-        qc_transpiled = transpile(qc_meas, backend, optimization_level=0)
+        qc_transpiled = transpile(qc, backend, optimization_level=0)
         if verbose:
             print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
 
         print("--- Running", time.time())
-        result = backend.run(qc_transpiled, shots=shots).result()
-        print(result)
+        result = backend.run(qc_transpiled, shots=1).result()
+        # print(result)
 
         print("--- Processing results", time.time())
+        
+        probabilities = result.data()["probabilities"]
 
-        counts = result.get_counts(qc_transpiled)
-        counts_post = postselect_counts(counts, kappa, idx_coord_map, n_qubits_ancilla, lattice_qubits)
+        shots = 1.0
+        idxs_populated = np.flatnonzero(probabilities > 1E-12)
+        counts = {
+            format(idx, f"0{n_qubits}b"): probabilities[idx]
+            for idx in idxs_populated
+        }
+        counts_post = postselect_counts(counts, kappa, idx_coord_map, n_qubits_ancilla, lattice_qubits, verbose=False)
         shots_post = sum(list(counts_post.values()))
-        print("Full counts:", counts)
-        print("Post-selected counts:", counts_post)
+        # print("Full counts:", counts)
+        # print("Post-selected counts:", counts_post)
         print("Total post-selected counts:", shots_post)
 
         lattice_I = measurements_to_lattice(
             0,
             m,
             N,
-            counts, shots,
+            counts_post, shots,
             idx_coord_map,
             lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
-            verbose=True
+            verbose=False
         )
         lattice_I *= global_norm
         if verbose:
@@ -373,10 +380,9 @@ def simulate(
             counts, shots,
             idx_coord_map,
             lattice_qubits, direction_qubits, switch_qubits, ancilla_qubits,
-            verbose=True
+            verbose=False
         )
-        # @TODO - check normalization factor
-        lattice_S *= m / delta_t * global_norm / 2
+        lattice_S *= m / delta_t * global_norm
         if verbose:
             if np.linalg.norm(lattice_S) > 0:
                 print(lattice_S)
@@ -404,4 +410,3 @@ def simulate(
     print(f"Total time: {time_stop-time_start} s")
 
     return lattices_I, lattices_S, norms
-

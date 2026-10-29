@@ -6,7 +6,7 @@ np.set_printoptions(threshold=np.inf)
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 
-from qlbm_circuits import state_preparation, absorption_scattering, absorption_emission, angular_redistribution, special_boundary_conditions, propagation
+from qlbm_circuits import state_preparation, absorption_scattering, absorption_emission, angular_redistribution, angular_redistribution_3d, special_boundary_conditions, propagation
 from qlbm_utils import compute_memory_requirements, allocate_registers, compute_binary_representations, map_indices_coordinates, construct_identity_matrices
 from lbm_utils import compute_grid_parameters, compute_scheme_velocities, compute_scheme_adjacencies, compute_scheme_boundaries
 from analysis import postselect_counts, measurements_to_lattice, statevector_analysis, statevector_analysis_deep
@@ -23,6 +23,7 @@ def simulate(
     kappa: float = 0.0,
     sigma: float = 0.0,
     angular_redistribution_coefficients: Iterable[float] | None = None,
+    use_mask: bool = False,
     boundary_conditions: Iterable | None = None,
     save_lattices: bool = False,
     save_circuit: bool = False,
@@ -43,6 +44,7 @@ def simulate(
         kappa: Constant or array of absorption coefficients.
         sigma: Constant or array of scattering coefficients.
         angular_redistribution_coefficents: Angular redistribution coefficients for use if AR is to be applied.
+        use_mask: Specifies whether to apply a mask for angular redistribution.
         boundary_conditions: Boundary condition specifications.
         save_lattices: Specifies whether to save the lattice at intermediate timesteps.
         save_circuit: Specifies whether to save an image of the circuit at each timestep.
@@ -58,8 +60,11 @@ def simulate(
     time_start = time.time()
 
     # 0. Input parsing
+    if len(N) != n:
+        raise ValueError(f"Grid dimensions list `N` has length {len(N)} != {n}")
+    
     if boundary_conditions is None:
-        boundary_conditions = [("periodic", None)]*4
+        boundary_conditions = [("periodic", None)]*(2*n)
 
     if statevector_analysis_options is None:
         statevector_analysis_options = []
@@ -71,6 +76,8 @@ def simulate(
     boundary_idxs = compute_scheme_boundaries(n, m, idxs_dir, cs)
     coordinate_max_bin, m_max_bin = compute_binary_representations(m, M)
     idx_coord_map, coord_idx_map = map_indices_coordinates(N, coordinate_max_bin)
+    
+    # return
 
     # 2. Initial conditions, sources, boundaries
     if I_i is None:
@@ -89,11 +96,6 @@ def simulate(
     # Only perform AS if the angular redistribution_coefficients are specified and not all close to 1.0
     perform_AR = angular_redistribution_coefficients is not None and not np.isclose(angular_redistribution_coefficients[0], 1.0)
 
-    if perform_AR:
-        norm_factor = m/2
-    else:
-        norm_factor = m
-
     # Only perform (special) BCs if at least one boundary condition is specified to not be periodic
     perform_BC = (
         (boundary_conditions is not None and any([boundary_condition[0] != "periodic" for boundary_condition in boundary_conditions])) or
@@ -102,10 +104,12 @@ def simulate(
     )
 
     n_qubits, n_qubits_lattice, n_qubits_mask, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla, ancilla_idxs_AS, ancilla_idxs_AE, ancilla_idxs_AR, ancilla_idxs_BC = compute_memory_requirements(
-        m, M_0,
+        n, m,
+        M_0,
         include_AS=perform_AS,
         include_AR=perform_AR,
         include_BC=perform_BC,
+        use_mask=use_mask
     )
 
     qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla, creg_measure = allocate_registers(n_qubits, n_qubits_lattice, n_qubits_mask, n_qubits_boundary, n_qubits_direction, n_qubits_switch, n_qubits_ancilla)
@@ -127,13 +131,13 @@ def simulate(
             I_2,
             n_qubits_direction,
             qreg_direction, qreg_switch, qreg_ancilla,
-            ancilla_idxs_AS,
+            ancilla_idxs_AS
         )
 
     AECircuit = absorption_emission(
         I_2M, Z_2M,
         qreg_switch, qreg_ancilla,
-        ancilla_idxs_AE,
+        ancilla_idxs_AE
     )
 
     PCircuit_list, PQubit_list = propagation(
@@ -150,9 +154,14 @@ def simulate(
     if perform_AR:
         print("Performing angular redistribution")
 
-        # @TEST
-        ARCircuit = angular_redistribution(
-        # ARCircuit = angular_redistribution_3d(
+        if n <= 2:
+            angular_redistribution_method = angular_redistribution
+        elif n == 3:
+            angular_redistribution_method = angular_redistribution_3d
+        else:
+            raise NotImplementedError()
+        
+        ARCircuit = angular_redistribution_method(
             m,
             delta_t,
             angular_redistribution_coefficients,
@@ -164,6 +173,7 @@ def simulate(
             ancilla_idxs_AR,
         )
 
+    # @TODO - clean up
     BCCircuit = None
     if perform_BC:
         print(f"Performing special boundary conditions: {boundary_conditions}")
@@ -181,7 +191,9 @@ def simulate(
         )
 
     qc_0 = QuantumCircuit(
+        # @TEST - clean up
         qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
+        # qreg_lattice, qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
         creg_measure
     )
 
@@ -196,7 +208,7 @@ def simulate(
     print(
         f"Lattice qubits: {lattice_qubits}",
         f"Auxiliary qubits: {auxiliary_qubits}",
-        f"Mask qubits: {mask_qubits},"
+        f"Mask qubits: {mask_qubits}",
         f"Boundary qubits: {boundary_qubits}",
         f"Direction qubits: {direction_qubits}",
         f"Switch qubits: {switch_qubits}",
@@ -225,7 +237,6 @@ def simulate(
         # @TODO - should be exposed as user options
         backend = AerSimulator(
             method="automatic",
-            # method="matrix_product_state",
             max_parallel_threads=0,
             max_parallel_experiments=0,
             max_parallel_shots=1
@@ -241,9 +252,7 @@ def simulate(
         qc = qc_0.copy()
 
         global_norm = 1
-
-        # print("trying to recover intensities and sources:\n", I_prev, "\n", S_prev)
-        print(f"State prep using norm_factor={norm_factor}")
+        
         SPCircuit, norm = state_preparation(
             I_prev, S_prev if timestep >= 0 else np.zeros((M,m)),
             n, m,
@@ -255,7 +264,6 @@ def simulate(
             n_qubits, n_qubits_ancilla,
             qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
             verbose=False,
-            norm_factor=norm_factor
         )
         print("Composing SP", time.time())
         qc.compose(SPCircuit, qreg_lattice[:] + qreg_mask[:] + qreg_boundary[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
@@ -277,32 +285,43 @@ def simulate(
 
         # @TODO - at the zeroth timestep, should we only perform state preparation?
         if timestep >= 0:
+            r = 0
             if ASCircuit is not None:
                 print("Composing AS", time.time())
                 qc.compose(ASCircuit, qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
                 qc.barrier()
+                # print(transpile(ASCircuit, backend, optimization_level=0).decompose(reps=r).count_ops())
 
             print("Composing AE", time.time())
             qc.compose(AECircuit, qreg_switch[:] + qreg_ancilla[:], inplace=True)
             qc.barrier()
+            # print(transpile(AECircuit, backend, optimization_level=0).decompose(reps=r).count_ops())
 
             # AE adds a factor of 1/2
             global_norm *= 2
 
             print("Composing P", time.time())
-            for PCircuit, PQubits in zip(PCircuit_list, PQubit_list):
-                qc.compose(PCircuit, PQubits, inplace=True)
-            qc.barrier()
+            for i, (c_mu, PCircuit, PQubits) in enumerate(zip(cs, PCircuit_list, PQubit_list)):
+                # @TEST - randomized thingy
+                override = True
+                if np.random.rand() <= 1/np.linalg.norm(c_mu) or override:
+                    print(f"propagating in direction #{i}")
+                    qc.compose(PCircuit, PQubits, inplace=True)
+                    qc.barrier()
+                    # print(transpile(PCircuit, backend, optimization_level=0).decompose(reps=r).count_ops())
 
             if ARCircuit is not None:
                 print("Composing AR", time.time())
                 qc.compose(ARCircuit, qreg_mask[:] + qreg_direction[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
                 qc.barrier()
+                # print(transpile(ARCircuit, backend, optimization_level=0).decompose(reps=r).count_ops())
 
+            # @TODO - clean up
             if BCCircuit is not None:
                 print("Composing BC", time.time())
                 qc.compose(BCCircuit, qreg_boundary[:] + qreg_switch[:] + qreg_ancilla[:], inplace=True)
                 qc.barrier()
+                # print(transpile(BCCircuit, backend, optimization_level=0).decompose(reps=r).count_ops())
 
         if "shallow" in statevector_analysis_options:
             print("--- Shallow statevector analysis", time.time())
@@ -332,7 +351,7 @@ def simulate(
         print("--- Transpiling", time.time())
 
         qc_transpiled = transpile(qc, backend, optimization_level=0)
-        if verbose:
+        if verbose or True: # @TEST
             print(qc_transpiled.count_ops(), sum([opcount for opcount in qc_transpiled.count_ops().values()]))
 
         print("--- Running", time.time())
@@ -410,3 +429,4 @@ def simulate(
     print(f"Total time: {time_stop-time_start} s")
 
     return lattices_I, lattices_S, norms
+

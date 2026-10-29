@@ -269,7 +269,12 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
                     lattice_S[*[N_i//2 for N_i in N], 4:8] = 1.0/np.sqrt(2)
                     lattice_S[*[N_i//2 for N_i in N], 4:8] = 1.0/np.sqrt(5)
             elif n == 3:
-                lattice_S[*[N_i//2 for N_i in N], :] = 1.0
+                from lbm_utils import compute_scheme_velocities
+                idxs_dir, cs = compute_scheme_velocities(n, m)
+                
+                for idx_dir, c in zip(idxs_dir, cs):
+                    print(np.linalg.norm(c))
+                    lattice_S[*[N_i//2 for N_i in N], idx_dir] = 1.0 / np.linalg.norm(c)
         else:
             lattice_S[*[N_i//2 for N_i in N], :] = 1.0
     elif source_location.lower() == "corner":
@@ -291,7 +296,7 @@ def test_isotropic_source(n=2, m=8, N=None, n_timesteps=3, source_location=None,
     S_i = lattice_to_vector(lattice_S)
 
     # @TODO - optimize more rigorously
-    alpha = 0.50/(m/4)
+    alpha = 0.5/(m/4)
     angular_redistribution_coefficients = np.zeros((m,))
     angular_redistribution_coefficients[0] = alpha
     angular_redistribution_coefficients[+1] = (1-alpha)/2
@@ -365,9 +370,9 @@ def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3, share_colorbar=No
             elif n == 3:
                 # @TODO - should be exposed as a user option
                 # Plot the z=0 slice
-                # im = ax[timestep].imshow(lattice.sum(axis=3)[:, 0, :], vmax=max_val)
+                im = ax[timestep].imshow(lattice.sum(axis=3)[N[0]//2, :, :], vmax=max_val)
                 # Plot a projection onto the z=0 slice
-                im = ax[timestep].imshow(lattice.sum(axis=3).sum(axis=2), vmax=max_val)
+                # im = ax[timestep].imshow(lattice.sum(axis=3).sum(axis=2), vmax=max_val)
 
             ax[timestep].set_title(f"Timestep {timestep}")
 
@@ -382,11 +387,11 @@ def analysis_isotropic_source(n=2, m=8, N=None, n_timesteps=3, share_colorbar=No
             elif n == 3:
                 # @TODO - should be exposed as a user option
                 # Plot the z=0 slice
-                # im = ax[timestep].imshow(lattice.sum(axis=3)[0, :, :])
+                im = ax[timestep].imshow(lattice.sum(axis=3)[N[0]//2, :, :], norm=LogNorm(), cmap="magma")
                 # Plot a projection onto the z=0 slice
-                im = ax[t].imshow(lattice.sum(axis=3).sum(axis=2))
+                # im = ax[t].imshow(lattice.sum(axis=3).sum(axis=2), norm=LogNorm(), cmap="magma")
                 
-            fig.colorbar(im, orientation="horizontal", pad=0.1)
+            # fig.colorbar(im, orientation="horizontal", pad=0.1)
           
             ax[t].set_title(f"Timestep {timestep}")
 
@@ -695,7 +700,7 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
     if "half" in source_type:
         N[1] //= 2
 
-    alpha = 0.33/(m/4)
+    alpha = 0.33/(m/4) # @TEST - was previously 0.33, try again with new value
     angular_redistribution_coefficients = np.zeros((m,))
     angular_redistribution_coefficients[0] = alpha
     angular_redistribution_coefficients[+1] = (1-alpha)/2
@@ -703,8 +708,6 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
 
     boundary_conditions = [("absorb", None)]*4
     
-    # return
-
     lattices_I, lattices_S, norms = simulate(
         I_i, S_i,
         n, m,
@@ -712,6 +715,7 @@ def test_shadow(n=2, m=8, source_type=None, N=None, n_timesteps=5, renormalize=F
         n_timesteps=n_timesteps,
         kappa=kappa,
         angular_redistribution_coefficients=angular_redistribution_coefficients,
+        use_mask=True,
         boundary_conditions=boundary_conditions,
         save_lattices=True, save_name=save_name
     )

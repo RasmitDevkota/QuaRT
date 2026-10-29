@@ -10,7 +10,7 @@ import multiprocessing as mp
 from multiprocessing import Pool
 
 from qiskit import QuantumCircuit, qpy
-from qiskit.circuit.library import StatePreparation, UnitaryGate, XGate, ZGate
+from qiskit.circuit.library import UnitaryGate, XGate, ZGate
 
 def state_preparation(
     I_i, S_i,
@@ -22,8 +22,7 @@ def state_preparation(
     boundary_idxs, boundary_conditions,
     n_qubits, n_qubits_ancilla,
     qreg_lattice, qreg_mask, qreg_boundary, qreg_direction, qreg_switch, qreg_ancilla,
-    verbose=False,
-    norm_factor=1.0
+    verbose=False
 ):
     initial_statevector = np.zeros((2**n_qubits))
 
@@ -38,12 +37,15 @@ def state_preparation(
     S_i_coords = S_i.sum(axis=-1).reshape([Ni for Ni in N])
 
     source_coordinates = np.argwhere(S_i_coords > 0.0)
+    
+    if qreg_ancilla.size > 0 and qreg_mask.size > 0:
+        radius_AR = np.mean(N[:2])//4 + 0.5
+        print(radius_AR)
 
     for c, (coordinate, coordinate_bin) in enumerate(coord_idx_map.items()):
         coordinate_bin = coordinate_bin[::-1]
 
         if qreg_ancilla.size > 0 and qreg_mask.size > 0:
-            radius_AR = np.mean(N[:2])//4 + 0.5
             mask_bool = np.any([(coordinate[0] - source_coordinate[0])**2 + (coordinate[1] - source_coordinate[1])**2 <= radius_AR**2 for source_coordinate in source_coordinates])
             mask_bin = str(int(mask_bool))
 
@@ -218,7 +220,7 @@ def angular_redistribution(
     idx_coord_map, coord_idx_map, m_max_bin,
     n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
     qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
-    ancilla_idxs_AR,
+    ancilla_idxs_AR
 ):
     # Construct matrices
     dim_R = 2**(n_qubits_direction)
@@ -240,18 +242,18 @@ def angular_redistribution(
         print(f"redistributing from {mu_0} to {mu_adjs} ({mu_adj_bins})")
         R_p[int(f"0b{mu_adj_bins[0][::-1]}", 2), int(f"0b{mu_adj_bins[+1][::-1]}", 2)] = 1
         R_m[int(f"0b{mu_adj_bins[0][::-1]}", 2), int(f"0b{mu_adj_bins[-1][::-1]}", 2)] = 1
-
+    
     # Construct quantum circuit
-    CR_p = UnitaryGate(R_p, label="$R_+$").control(4)
-    CR_m = UnitaryGate(R_m, label="$R_-$").control(4)
+    CR_p = UnitaryGate(R_p, label="$R_+$").control(3 + n_qubits_mask)
+    CR_m = UnitaryGate(R_m, label="$R_-$").control(3 + n_qubits_mask)
     
     # Construct ancilla state preparation matrices via Householder reflection
     coefficients_AR = [
         angular_redistribution_coefficients[0], # I is applied to |00>
         angular_redistribution_coefficients[+1], # R_+ is applied to |01>
         angular_redistribution_coefficients[-1], # R_- is applied to |10>
-        # angular_redistribution_coefficients[0] # I is applied to |11>
-        0
+        angular_redistribution_coefficients[0] # I is applied to |11> # @TEST - try shadow again with this instead of the 0
+        # 0
     ]
     amplitudes_AR = np.sqrt(coefficients_AR / np.sum(coefficients_AR))
     print(amplitudes_AR)
@@ -266,12 +268,10 @@ def angular_redistribution(
         U_alpha_matrix = np.eye(len(amplitudes_AR)) - 2 * np.outer(reflection_axis, reflection_axis) / norm_squared
     
     U_alpha = UnitaryGate(U_alpha_matrix, label="$U_\\text{alpha}$")
-
+    
     qc = QuantumCircuit(qreg_mask, qreg_direction, qreg_switch, qreg_ancilla)
     
-    qc.barrier(label="prep_A")
     qc.append(U_alpha, qreg_ancilla[ancilla_idxs_AR])
-    qc.barrier(label="prep_B")
 
     # Flip switch so that controls act on intensity only
     qc.x(qreg_switch[:])
@@ -289,7 +289,108 @@ def angular_redistribution(
     qc.x(qreg_switch[:])
     
     qc.append(U_alpha, qreg_ancilla[ancilla_idxs_AR])
+    
+    return qc
 
+def angular_redistribution_3d(
+    m,
+    delta_t,
+    angular_redistribution_coefficients,
+    idxs_dir, cs,
+    adjacencies,
+    idx_coord_map, coord_idx_map, m_max_bin,
+    n_qubits_mask, n_qubits_direction, n_qubits_switch, n_qubits_ancilla,
+    qreg_mask, qreg_direction, qreg_switch, qreg_ancilla,
+    ancilla_idxs_AR,
+):
+    # Construct matrices
+    dim_R = 2**(n_qubits_direction)
+    
+    edges = [
+        (mu_0, mu_adj)
+        for mu_0 in range(m)
+        for mu_adj in range(mu_0+1, m)
+        if adjacencies[mu_0][mu_adj] == 1
+    ]
+
+    matching_idxs = {}
+    for edge in edges:
+        mu_0, mu_adj = edge
+
+        matching_idxs_incident = {
+            matching_idx
+            for edge_other, matching_idx in matching_idxs.items()
+            if mu_0 in edge_other or mu_adj in edge_other
+        }
+
+        matching_idx = 0
+        while matching_idx in matching_idxs_incident:
+            matching_idx += 1
+
+        matching_idxs[edge] = matching_idx
+    
+    n_matchings = max(matching_idxs.values()) + 1
+    
+    matchings = [
+        [edge for edge, matching_idx in matching_idxs.items() if matching_idx == matching_idx_0]
+        for matching_idx_0 in range(n_matchings)
+    ]
+    
+    alpha = angular_redistribution_coefficients[0]
+    
+    W = alpha * np.eye(dim_R)
+    
+    for matching in matchings:
+        R = np.eye(dim_R)
+        
+        for mu_0, mu_adj in matching:
+            mu_0_bin = bin(mu_0)[2:].zfill(len(m_max_bin))
+            mu_adj_bin = bin(mu_adj)[2:].zfill(len(m_max_bin))
+
+            idx_0 = int(f"0b{mu_0_bin[::-1]}", 2)
+            idx_adj = int(f"0b{mu_adj_bin[::-1]}", 2)
+
+            R[idx_0, idx_0] = 0
+            R[idx_adj, idx_adj] = 0
+            R[idx_0, idx_adj] = 1
+            R[idx_adj, idx_0] = 1
+        
+        W += (1 - alpha) / n_matchings * R
+    
+    print(f"redistributing over {n_matchings} matchings of the direction adjacency graph")
+    
+    eigenvalues, eigenvectors = np.linalg.eigh(W)
+    S = eigenvectors @ np.diag(np.sqrt(np.clip(1 - eigenvalues**2, 0.0, None))) @ eigenvectors.T
+    
+    U = np.block([[W, S], [S, -W]])
+    ancilla_idx_AR = ancilla_idxs_AR[0]
+    n_blocks = 2**(1 + n_qubits_switch + n_qubits_mask)
+    
+    W_conditioned = np.zeros((n_blocks * dim_R, n_blocks * dim_R))
+    
+    for block in range(n_blocks):
+        ancilla = block % 2
+        switch = (block >> 1) % 2
+        mask = (block >> (1 + n_qubits_switch)) % 2 if n_qubits_mask > 0 else 1
+
+        for ancilla_other in range(2):
+            block_other = block - ancilla + ancilla_other
+
+            if switch == 0 and mask == 1:
+                W_conditioned[block::n_blocks, block_other::n_blocks] = U[
+                    ancilla*dim_R:(ancilla+1)*dim_R,
+                    ancilla_other*dim_R:(ancilla_other+1)*dim_R
+                ]
+            elif ancilla == ancilla_other:
+                W_conditioned[block::n_blocks, block_other::n_blocks] = np.eye(dim_R)
+    
+    qc = QuantumCircuit(qreg_mask, qreg_direction, qreg_switch, qreg_ancilla)
+    
+    qc.append(
+        UnitaryGate(W_conditioned, label="$W$"),
+        [qreg_ancilla[ancilla_idx_AR]] + qreg_switch[:] + qreg_mask[:] + qreg_direction[:]
+    )
+    
     return qc
 
 def special_boundary_conditions(
@@ -457,7 +558,7 @@ def single_direction_propagation(
             n_qubits_axis = int(round(np.log2(N[axis])))
 
             if 2**n_qubits_axis != N[axis]:
-                raise ValueError(f"Axis resolution N[{axis}]={N[axis]} is not a power of 2, which is required for arithmetic propagation")
+                raise ValueError(f"Axis resolution N[{axis}]={N[axis]} is not a power of 2, which is required for arithmetic propagation.")
             
             qreg_axis = qreg_lattice[n_qubits_axis_offset:n_qubits_axis_offset+n_qubits_axis][::-1]
             
@@ -499,7 +600,7 @@ def single_direction_propagation(
 
         return CP_mu_circuit, CP_mu_qubits
 
-    def single_axis_propagation(P_mu_circuit, qreg_axis, displacement):
+def single_axis_propagation(P_mu_circuit, qreg_axis, displacement):
     for bit in range(len(qreg_axis)):
         if not (abs(displacement) >> bit) & 1:
             continue
@@ -517,4 +618,3 @@ def single_direction_propagation(
 
             for q in range(1, n_qubits_field):
                 P_mu_circuit.mcx(qreg_field[0:q], qreg_field[q])
-

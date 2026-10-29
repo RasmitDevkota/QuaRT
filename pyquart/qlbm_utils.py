@@ -5,17 +5,19 @@ from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit
 from lbm_utils import compute_grid_parameters
 
 def compute_memory_requirements(
-    m, M_0,
+    n, m,
+    M_0,
     include_AS=False,
     include_AR=False,
     include_BC=False,
+    use_mask=False,
     verbose=False
 ):
     """Compute number of qubits needed for each register of quantum circuit.
     """
 
     n_qubits_lattice = int(np.ceil(np.log2(M_0)))
-    n_qubits_boundary = 1
+    n_qubits_boundary = 1 # @TEST - clean up
     n_qubits_direction = int(np.ceil(np.log2(m)))
     n_qubits_switch = 1
 
@@ -34,21 +36,28 @@ def compute_memory_requirements(
 
     # AR
     if include_AR:
-        n_qubits_mask = 1
+        if use_mask:
+            n_qubits_mask = 1
+        else:
+            n_qubits_mask = 0
 
-        ancilla_idxs_AR = list(range(n_qubits_ancilla, n_qubits_ancilla+2))
-        n_qubits_ancilla += 2
+        n_qubits_ancilla_AR = 1 if n == 3 else 2
+
+        ancilla_idxs_AR = list(range(n_qubits_ancilla, n_qubits_ancilla+n_qubits_ancilla_AR))
+        n_qubits_ancilla += n_qubits_ancilla_AR
     else:
         n_qubits_mask = 0
 
         ancilla_idxs_AR = None
 
+    # @TODO - clean up
     # BC
     if include_BC:
         ancilla_idxs_BC = list(range(n_qubits_ancilla, n_qubits_ancilla+1))
         n_qubits_ancilla += 1
     else:
         ancilla_idxs_BC = None
+    # ancilla_idxs_BC = None
 
     n_qubits = n_qubits_lattice + n_qubits_mask + n_qubits_boundary + n_qubits_direction + n_qubits_switch + n_qubits_ancilla
 
@@ -148,4 +157,3 @@ def lattice_to_vector(lattice):
         v[idx_dec] = lattice[coord]
 
     return v
-
